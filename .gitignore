@@ -1,0 +1,4 @@
+node_modules
+.vibe
+__pycache__
+*.md
