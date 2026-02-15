@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from tmq_backend.config import get_configured_providers
 from tmq_backend.routes.data import router as data_router
 from tmq_backend.routes.indicators import router as indicators_router
 from tmq_backend.routes.backtest import router as backtest_router
@@ -24,6 +25,12 @@ app.include_router(chat_router)
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/config")
+def config():
+    """Return available AI providers configured via .env."""
+    return {"providers": get_configured_providers()}
 
 
 if __name__ == "__main__":

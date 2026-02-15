@@ -14,6 +14,9 @@ dependencies = [
     "pydantic",
 ]
 
+[project.scripts]
+tmq = "tmq_backend.cli:run"
+
 [project.optional-dependencies]
 dev = ["pytest", "httpx"]
 

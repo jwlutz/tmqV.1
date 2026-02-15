@@ -34,21 +34,22 @@ CONSTRAINTS = [
 
 # Agentic behaviors (persistence, tool-first, plan-then-act)
 AGENTIC_INSTRUCTIONS = [
-    "Continue working until the task is completely resolved.",
-    "If unsure about any data or backtest results, use tools to retrieve information. Do NOT guess.",
-    "Before each tool call, briefly state what you're trying to accomplish.",
+    "Continue working until the task is completely resolved. Do not yield control back until verified.",
+    "If unsure about any data, market conditions, or backtest results, use tools to retrieve information. Do NOT guess or fabricate.",
+    "Before each tool call, state: (1) what you're trying to accomplish, (2) which tool you'll use and why.",
+    "After each tool result, reflect on what you learned before proceeding.",
 ]
 
-# Few-shot examples for each provider (optional, can be extended)
+# Few-shot examples (avoid word "think" for Claude 4.5 - use "reasoning" or "analysis")
 EXAMPLES = [
     {
         "user": "What's the RSI for Bitcoin?",
-        "assistant_thought": "I need to fetch the RSI indicator for Bitcoin. I'll use BTC-USD as the symbol.",
+        "assistant_reasoning": "I need to fetch the RSI indicator for Bitcoin. I'll use BTC-USD as the symbol since that's the Yahoo Finance format.",
         "tool_call": "tmq_indicator with symbol='BTC-USD', indicator='rsi'",
     },
     {
         "user": "Backtest a moving average strategy on Apple",
-        "assistant_thought": "I'll run the sma_crossover strategy on AAPL.",
+        "assistant_reasoning": "The user wants to evaluate an SMA crossover strategy on AAPL. I'll run tmq_backtest with the sma_crossover template.",
         "tool_call": "tmq_backtest with symbol='AAPL', strategy='sma_crossover'",
     },
 ]

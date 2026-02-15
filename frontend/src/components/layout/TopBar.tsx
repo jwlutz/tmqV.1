@@ -88,12 +88,22 @@ function getModelsForVendor(vendor: string) {
   }
 }
 
+// Provider display names
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  openrouter: 'OpenRouter',
+  google: 'Google',
+  xai: 'xAI',
+}
+
 export function TopBar() {
   const { mode, setMode } = useMode()
   const {
     apiKey, setApiKey, model, setModel, aiVendor, setAiVendor,
     useOpenRouter, setUseOpenRouter, openRouterApiKey, setOpenRouterApiKey,
-    openRouterModel, setOpenRouterModel
+    openRouterModel, setOpenRouterModel,
+    serverConfig, selectedServerProvider, setSelectedServerProvider
   } = useChatSettings()
   const { cryptoExchange, setCryptoExchange, equitySource, setEquitySource, providerCredentials, setProviderCredential } = useDataSettings()
   const [showSettings, setShowSettings] = useState(false)
@@ -102,6 +112,12 @@ export function TopBar() {
 
   // Get models for current AI vendor
   const availableModels = getModelsForVendor(aiVendor)
+
+  // Get configured providers from server
+  const configuredProviders = Object.entries(serverConfig.providers)
+    .filter(([, v]) => v)
+    .map(([k]) => k)
+  const hasServerProviders = configuredProviders.length > 0
 
   // Alpaca credential handlers
   const alpacaCreds = providerCredentials.alpaca || { apiKey: '', secretKey: '', endpoint: 'paper' as const }
@@ -343,119 +359,222 @@ export function TopBar() {
               <div className="p-2 space-y-2">
                 <h4 className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider">AI</h4>
 
-                {/* OpenRouter Toggle */}
-                <div className="flex items-center justify-between">
-                  <label className="text-xs text-[var(--text-secondary)]">Use OpenRouter</label>
-                  <button
-                    onClick={() => setUseOpenRouter(!useOpenRouter)}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${
-                      useOpenRouter ? 'bg-[var(--green-up)]' : 'bg-[var(--bg-medium)] border border-[var(--border)]'
-                    }`}
+                {/* Provider Selection */}
+                <div>
+                  <label className="text-xs text-[var(--text-secondary)] block mb-1">Provider</label>
+                  <select
+                    value={selectedServerProvider || '_custom'}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (val === '_custom') {
+                        setSelectedServerProvider(null)
+                      } else {
+                        setSelectedServerProvider(val)
+                        // Auto-set useOpenRouter based on provider
+                        setUseOpenRouter(val === 'openrouter')
+                      }
+                    }}
+                    className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                               rounded text-xs text-[var(--text-primary)]
+                               outline-none focus:border-[var(--text-secondary)]"
                   >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        useOpenRouter ? 'translate-x-5' : ''
-                      }`}
-                    />
-                  </button>
+                    {/* Server-configured providers */}
+                    {hasServerProviders && (
+                      <optgroup label="Server Keys">
+                        {configuredProviders.map(p => (
+                          <option key={p} value={p}>
+                            {PROVIDER_LABELS[p] || p} (server)
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {/* Custom key option */}
+                    <optgroup label="Manual">
+                      <option value="_custom">Custom API Key</option>
+                    </optgroup>
+                  </select>
                 </div>
 
-                {useOpenRouter ? (
+                {/* Server provider status */}
+                {selectedServerProvider && (
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--green-up)]">
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Using server key
+                  </div>
+                )}
+
+                {/* Custom key mode OR OpenRouter via server */}
+                {selectedServerProvider === null ? (
                   <>
-                    {/* OpenRouter Model Selection */}
-                    <div>
-                      <label className="text-xs text-[var(--text-secondary)] block mb-1">Model</label>
-                      <select
-                        value={openRouterModel}
-                        onChange={e => setOpenRouterModel(e.target.value)}
-                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
-                                   rounded text-xs text-[var(--text-primary)]
-                                   outline-none focus:border-[var(--text-secondary)]"
+                    {/* OpenRouter Toggle for custom mode */}
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-[var(--text-secondary)]">Use OpenRouter</label>
+                      <button
+                        onClick={() => setUseOpenRouter(!useOpenRouter)}
+                        className={`relative w-10 h-5 rounded-full transition-colors ${
+                          useOpenRouter ? 'bg-[var(--green-up)]' : 'bg-[var(--bg-medium)] border border-[var(--border)]'
+                        }`}
                       >
-                        <optgroup label="Anthropic (Claude)">
-                          {OPENROUTER_MODELS.filter(m => m.provider === 'anthropic').map(m => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="OpenAI (GPT)">
-                          {OPENROUTER_MODELS.filter(m => m.provider === 'openai' && m.value.startsWith('openai/')).map(m => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Google (Gemini)">
-                          {OPENROUTER_MODELS.filter(m => m.provider === 'google').map(m => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Other">
-                          {OPENROUTER_MODELS.filter(m => !m.value.startsWith('anthropic/') && !m.value.startsWith('openai/') && !m.value.startsWith('google/')).map(m => (
-                            <option key={m.value} value={m.value}>{m.label}</option>
-                          ))}
-                        </optgroup>
-                      </select>
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                            useOpenRouter ? 'translate-x-5' : ''
+                          }`}
+                        />
+                      </button>
                     </div>
-                    {/* OpenRouter API Key */}
-                    <div>
-                      <label className="text-xs text-[var(--text-secondary)] block mb-1">OpenRouter API Key</label>
-                      <input
-                        type="password"
-                        value={openRouterApiKey}
-                        onChange={e => setOpenRouterApiKey(e.target.value)}
-                        placeholder="sk-or-v1-..."
-                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
-                                   rounded text-xs text-[var(--text-primary)] font-mono
-                                   placeholder:text-[var(--text-tertiary)] outline-none
-                                   focus:border-[var(--text-secondary)]"
-                      />
-                    </div>
-                    <p className="text-xs text-[var(--text-tertiary)] italic">
-                      One API key for all providers
-                    </p>
+
+                    {useOpenRouter ? (
+                      <>
+                        {/* OpenRouter Model Selection */}
+                        <div>
+                          <label className="text-xs text-[var(--text-secondary)] block mb-1">Model</label>
+                          <select
+                            value={openRouterModel}
+                            onChange={e => setOpenRouterModel(e.target.value)}
+                            className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                       rounded text-xs text-[var(--text-primary)]
+                                       outline-none focus:border-[var(--text-secondary)]"
+                          >
+                            <optgroup label="Anthropic (Claude)">
+                              {OPENROUTER_MODELS.filter(m => m.provider === 'anthropic').map(m => (
+                                <option key={m.value} value={m.value}>{m.label}</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="OpenAI (GPT)">
+                              {OPENROUTER_MODELS.filter(m => m.provider === 'openai' && m.value.startsWith('openai/')).map(m => (
+                                <option key={m.value} value={m.value}>{m.label}</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Google (Gemini)">
+                              {OPENROUTER_MODELS.filter(m => m.provider === 'google').map(m => (
+                                <option key={m.value} value={m.value}>{m.label}</option>
+                              ))}
+                            </optgroup>
+                            <optgroup label="Other">
+                              {OPENROUTER_MODELS.filter(m => !m.value.startsWith('anthropic/') && !m.value.startsWith('openai/') && !m.value.startsWith('google/')).map(m => (
+                                <option key={m.value} value={m.value}>{m.label}</option>
+                              ))}
+                            </optgroup>
+                          </select>
+                        </div>
+                        {/* OpenRouter API Key */}
+                        <div>
+                          <label className="text-xs text-[var(--text-secondary)] block mb-1">OpenRouter API Key</label>
+                          <input
+                            type="password"
+                            value={openRouterApiKey}
+                            onChange={e => setOpenRouterApiKey(e.target.value)}
+                            placeholder="sk-or-v1-..."
+                            className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                       rounded text-xs text-[var(--text-primary)] font-mono
+                                       placeholder:text-[var(--text-tertiary)] outline-none
+                                       focus:border-[var(--text-secondary)]"
+                          />
+                        </div>
+                        <p className="text-xs text-[var(--text-tertiary)] italic">
+                          One API key for all providers
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        {/* Direct Provider Settings */}
+                        <div>
+                          <label className="text-xs text-[var(--text-secondary)] block mb-1">Vendor</label>
+                          <select
+                            value={aiVendor}
+                            onChange={e => setAiVendor(e.target.value)}
+                            className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                       rounded text-xs text-[var(--text-primary)]
+                                       outline-none focus:border-[var(--text-secondary)]"
+                          >
+                            {AI_VENDORS.map(v => (
+                              <option key={v.value} value={v.value}>{v.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-[var(--text-secondary)] block mb-1">Model</label>
+                          <select
+                            value={model}
+                            onChange={e => setModel(e.target.value)}
+                            className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                       rounded text-xs text-[var(--text-primary)]
+                                       outline-none focus:border-[var(--text-secondary)]"
+                          >
+                            {availableModels.map(m => (
+                              <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-xs text-[var(--text-secondary)] block mb-1">API Key</label>
+                          <input
+                            type="password"
+                            value={apiKey}
+                            onChange={e => setApiKey(e.target.value)}
+                            placeholder="sk-... or sk-ant-..."
+                            className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                       rounded text-xs text-[var(--text-primary)] font-mono
+                                       placeholder:text-[var(--text-tertiary)] outline-none
+                                       focus:border-[var(--text-secondary)]"
+                          />
+                        </div>
+                      </>
+                    )}
                   </>
                 ) : (
                   <>
-                    {/* Direct Provider Settings */}
-                    <div>
-                      <label className="text-xs text-[var(--text-secondary)] block mb-1">Provider</label>
-                      <select
-                        value={aiVendor}
-                        onChange={e => setAiVendor(e.target.value)}
-                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
-                                   rounded text-xs text-[var(--text-primary)]
-                                   outline-none focus:border-[var(--text-secondary)]"
-                      >
-                        {AI_VENDORS.map(v => (
-                          <option key={v.value} value={v.value}>{v.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-[var(--text-secondary)] block mb-1">Model</label>
-                      <select
-                        value={model}
-                        onChange={e => setModel(e.target.value)}
-                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
-                                   rounded text-xs text-[var(--text-primary)]
-                                   outline-none focus:border-[var(--text-secondary)]"
-                      >
-                        {availableModels.map(m => (
-                          <option key={m.value} value={m.value}>{m.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-[var(--text-secondary)] block mb-1">API Key</label>
-                      <input
-                        type="password"
-                        value={apiKey}
-                        onChange={e => setApiKey(e.target.value)}
-                        placeholder="sk-... or sk-ant-..."
-                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
-                                   rounded text-xs text-[var(--text-primary)] font-mono
-                                   placeholder:text-[var(--text-tertiary)] outline-none
-                                   focus:border-[var(--text-secondary)]"
-                      />
-                    </div>
+                    {/* Server provider model selection */}
+                    {selectedServerProvider === 'openrouter' ? (
+                      <div>
+                        <label className="text-xs text-[var(--text-secondary)] block mb-1">Model</label>
+                        <select
+                          value={openRouterModel}
+                          onChange={e => setOpenRouterModel(e.target.value)}
+                          className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                     rounded text-xs text-[var(--text-primary)]
+                                     outline-none focus:border-[var(--text-secondary)]"
+                        >
+                          <optgroup label="Anthropic (Claude)">
+                            {OPENROUTER_MODELS.filter(m => m.provider === 'anthropic').map(m => (
+                              <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="OpenAI (GPT)">
+                            {OPENROUTER_MODELS.filter(m => m.provider === 'openai' && m.value.startsWith('openai/')).map(m => (
+                              <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="Google (Gemini)">
+                            {OPENROUTER_MODELS.filter(m => m.provider === 'google').map(m => (
+                              <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="Other">
+                            {OPENROUTER_MODELS.filter(m => !m.value.startsWith('anthropic/') && !m.value.startsWith('openai/') && !m.value.startsWith('google/')).map(m => (
+                              <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
+                          </optgroup>
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs text-[var(--text-secondary)] block mb-1">Model</label>
+                        <select
+                          value={model}
+                          onChange={e => setModel(e.target.value)}
+                          className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                     rounded text-xs text-[var(--text-primary)]
+                                     outline-none focus:border-[var(--text-secondary)]"
+                        >
+                          {getModelsForVendor(selectedServerProvider).map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

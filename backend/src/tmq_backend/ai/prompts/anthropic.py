@@ -47,12 +47,15 @@ def format_constraints() -> str:
 
 
 def format_examples() -> str:
-    """Format few-shot examples in XML."""
+    """Format few-shot examples in XML.
+
+    Note: We use 'reasoning' instead of 'thinking' for Claude 4.5 compatibility.
+    """
     lines = ["<examples>"]
     for i, ex in enumerate(EXAMPLES, 1):
         lines.append(f"<example_{i}>")
         lines.append(f"User: {ex['user']}")
-        lines.append(f"Assistant thinking: {ex['assistant_thought']}")
+        lines.append(f"Assistant reasoning: {ex['assistant_reasoning']}")
         lines.append(f"Tool call: {ex['tool_call']}")
         lines.append(f"</example_{i}>")
     lines.append("</examples>")

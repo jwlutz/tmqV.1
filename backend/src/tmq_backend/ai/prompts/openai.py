@@ -50,7 +50,7 @@ def format_examples() -> str:
     for i, ex in enumerate(EXAMPLES, 1):
         lines.append(f"\n### Example {i}")
         lines.append(f"**User**: {ex['user']}")
-        lines.append(f"**Thinking**: {ex['assistant_thought']}")
+        lines.append(f"**Reasoning**: {ex['assistant_reasoning']}")
         lines.append(f"**Action**: {ex['tool_call']}")
     return "\n".join(lines)
 

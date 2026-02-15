@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react';
+import { fetchConfig, ServerConfig } from '../api/client';
 
 type Mode = 'live' | 'backtest';
 
@@ -88,6 +89,10 @@ interface AppContextValue {
   setOpenRouterApiKey: (key: string) => void;
   openRouterModel: string;
   setOpenRouterModel: (model: string) => void;
+  // Server config (providers from .env)
+  serverConfig: ServerConfig;
+  selectedServerProvider: string | null;  // null = use custom key
+  setSelectedServerProvider: (provider: string | null) => void;
   // Data settings
   cryptoExchange: string;
   setCryptoExchange: (exchange: string) => void;
@@ -129,6 +134,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [useOpenRouter, setUseOpenRouter] = useState(false);
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
   const [openRouterModel, setOpenRouterModel] = useState('anthropic/claude-haiku-4.5');
+  // Server config
+  const [serverConfig, setServerConfig] = useState<ServerConfig>({ providers: {} });
+  const [selectedServerProvider, setSelectedServerProvider] = useState<string | null>(null);
+
+  // Fetch server config on mount
+  useEffect(() => {
+    fetchConfig().then(config => {
+      setServerConfig(config);
+      // Auto-select first available provider
+      const available = Object.entries(config.providers)
+        .filter(([, v]) => v)
+        .map(([k]) => k);
+      if (available.length > 0 && !selectedServerProvider) {
+        setSelectedServerProvider(available[0]);
+      }
+    });
+  }, []);
   // Data settings
   const [cryptoExchange, setCryptoExchange] = useState('coinbase');
   const [equitySource, setEquitySource] = useState('yfinance');
@@ -252,6 +274,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       useOpenRouter, setUseOpenRouter,
       openRouterApiKey, setOpenRouterApiKey,
       openRouterModel, setOpenRouterModel,
+      serverConfig, selectedServerProvider, setSelectedServerProvider,
       cryptoExchange, setCryptoExchange,
       equitySource, setEquitySource,
       providerCredentials, setProviderCredential,
@@ -305,12 +328,14 @@ export function useChatSettings() {
   const {
     apiKey, setApiKey, model, setModel, aiVendor, setAiVendor,
     useOpenRouter, setUseOpenRouter, openRouterApiKey, setOpenRouterApiKey,
-    openRouterModel, setOpenRouterModel
+    openRouterModel, setOpenRouterModel,
+    serverConfig, selectedServerProvider, setSelectedServerProvider
   } = useAppContext();
   return {
     apiKey, setApiKey, model, setModel, aiVendor, setAiVendor,
     useOpenRouter, setUseOpenRouter, openRouterApiKey, setOpenRouterApiKey,
-    openRouterModel, setOpenRouterModel
+    openRouterModel, setOpenRouterModel,
+    serverConfig, selectedServerProvider, setSelectedServerProvider
   };
 }
 

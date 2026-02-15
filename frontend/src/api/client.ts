@@ -187,6 +187,21 @@ export async function submitFeatureRequest(
   }
 }
 
+// Server config types
+export interface ServerConfig {
+  providers: Record<string, boolean>;
+}
+
+export async function fetchConfig(): Promise<ServerConfig> {
+  try {
+    const res = await fetch(`${BASE_URL}/api/config`);
+    if (!res.ok) return { providers: {} };
+    return res.json();
+  } catch {
+    return { providers: {} };
+  }
+}
+
 export interface ChatSSEEvent {
   type: "text" | "tool_call" | "tool_result" | "done";
   content?: string;
@@ -197,26 +212,37 @@ export interface ChatSSEEvent {
 
 export interface ChatOptions {
   messages: Array<{ role: string; content: string }>;
-  apiKey: string;
+  apiKey?: string;
+  provider?: string;  // Server-side provider (anthropic, openrouter, etc.)
   model: string;
   useOpenRouter?: boolean;
 }
 
 export async function* streamChat(
   messages: Array<{ role: string; content: string }>,
-  apiKey: string,
+  apiKeyOrProvider: string,
   model: string = "gpt-4o-mini",
-  useOpenRouter: boolean = false
+  useOpenRouter: boolean = false,
+  isServerProvider: boolean = false
 ): AsyncGenerator<ChatSSEEvent> {
+  const body: Record<string, unknown> = {
+    messages,
+    model,
+    use_openrouter: useOpenRouter,
+  };
+
+  if (isServerProvider) {
+    // Use server-side key
+    body.provider = apiKeyOrProvider;
+  } else {
+    // Use custom API key
+    body.api_key = apiKeyOrProvider;
+  }
+
   const res = await fetch(`${BASE_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      messages,
-      api_key: apiKey,
-      model,
-      use_openrouter: useOpenRouter,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
