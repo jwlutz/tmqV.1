@@ -1,11 +1,16 @@
-import { useEffect, useRef, useMemo, useState, useCallback } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp } from 'lightweight-charts'
 import { useMarketData } from '../../hooks'
 import { useIndicators, IndicatorData } from '../../hooks/useIndicators'
 import { useMarketStats } from '../../hooks/useMarketStats'
+import { useDataSettings } from '../../context'
 import { LoadingOverlay } from '../ui'
 import { IndicatorsDropdown } from './IndicatorsDropdown'
+import { PaneIntervalSelector } from './PaneIntervalSelector'
+import { TickerDropdown } from './TickerDropdown'
+import { LayoutSelector } from './LayoutSelector'
 import { formatPrice } from '../../hooks/useMarketStats'
+import type { ChartLayout } from '../../context'
 
 interface ChartPaneProps {
   paneId: string;
@@ -14,11 +19,16 @@ interface ChartPaneProps {
   isActive: boolean;
   onActivate: () => void;
   onSymbolChange: (symbol: string) => void;
+  onIntervalChange: (interval: string) => void;
+  showLayoutSelector?: boolean;
+  layoutValue?: ChartLayout;
+  onLayoutChange?: (layout: ChartLayout) => void;
 }
 
-export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChange }: ChartPaneProps) {
-  const { candles, status, loadMoreHistory, isLoadingMore } = useMarketData(symbol, interval)
+export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChange, onIntervalChange, showLayoutSelector, layoutValue, onLayoutChange }: ChartPaneProps) {
+  const { candles, status, isCrypto, loadMoreHistory, isLoadingMore } = useMarketData(symbol, interval)
   const { stats: marketStats } = useMarketStats(symbol)
+  const { providerCredentials } = useDataSettings()
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -29,19 +39,10 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
   const lastTimeRef = useRef<number | null>(null)
   const isResettingRef = useRef(false)
   const chartDisposedRef = useRef(false)
-  const [editingSymbol, setEditingSymbol] = useState(false)
-  const [symbolInput, setSymbolInput] = useState(symbol)
-  const inputRef = useRef<HTMLInputElement>(null)
 
-  // Sync symbolInput when prop changes
-  useEffect(() => {
-    setSymbolInput(symbol)
-  }, [symbol])
-
-  // Focus input when editing starts
-  useEffect(() => {
-    if (editingSymbol) inputRef.current?.focus()
-  }, [editingSymbol])
+  // Show delayed data banner for equities without a live provider
+  const hasAlpaca = !!providerCredentials.alpaca?.apiKey
+  const showDelayedBanner = !isCrypto && !hasAlpaca
 
   // Compute date range from candles for indicator fetching
   const dateRange = useMemo(() => {
@@ -66,14 +67,6 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
   // Get latest candle for price display
   const latestCandle = candles.length > 0 ? candles[candles.length - 1] : null
   const currentPrice = latestCandle?.close ?? marketStats?.price
-
-  const handleSymbolSubmit = useCallback(() => {
-    const trimmed = symbolInput.trim().toUpperCase()
-    if (trimmed && trimmed !== symbol) {
-      onSymbolChange(trimmed)
-    }
-    setEditingSymbol(false)
-  }, [symbolInput, symbol, onSymbolChange])
 
   // Reset chart tracking refs when symbol or interval changes
   useEffect(() => {
@@ -410,34 +403,17 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
       className={`flex flex-col w-full h-full rounded-lg overflow-hidden border transition-colors ${
         isActive
           ? 'border-[var(--green-up)]/50'
-          : 'border-[var(--border)] hover:border-[var(--border-hover,rgba(255,255,255,0.12))]'
+          : 'border-[var(--border)] hover:border-[rgba(255,255,255,0.12)]'
       }`}
       onClick={onActivate}
     >
       {/* Pane header */}
       <div className="flex items-center justify-between gap-2 px-2 py-1 bg-[var(--bg-darker)] border-b border-[var(--border)] min-h-[28px]">
         <div className="flex items-center gap-2 min-w-0">
-          {/* Symbol input */}
-          {editingSymbol ? (
-            <input
-              ref={inputRef}
-              value={symbolInput}
-              onChange={e => setSymbolInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleSymbolSubmit()
-                if (e.key === 'Escape') { setEditingSymbol(false); setSymbolInput(symbol) }
-              }}
-              onBlur={handleSymbolSubmit}
-              className="w-24 px-1 py-0.5 bg-[var(--bg-medium)] border border-[var(--border)] rounded text-xs font-mono text-[var(--text-primary)] outline-none focus:border-[var(--text-secondary)]"
-            />
-          ) : (
-            <button
-              onClick={(e) => { e.stopPropagation(); setEditingSymbol(true) }}
-              className="text-xs font-mono font-semibold text-[var(--text-primary)] hover:text-[var(--green-up)] transition-colors"
-            >
-              {symbol}
-            </button>
-          )}
+          {/* Symbol dropdown with search */}
+          <div onClick={e => e.stopPropagation()}>
+            <TickerDropdown value={symbol} onChange={onSymbolChange} />
+          </div>
 
           {/* Price */}
           {currentPrice !== undefined && (
@@ -445,15 +421,48 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
               {formatPrice(currentPrice)}
             </span>
           )}
+
+          {/* Per-pane interval selector */}
+          <PaneIntervalSelector value={interval} onChange={onIntervalChange} />
         </div>
 
         <div className="flex items-center gap-1">
+          {/* Active indicator chips */}
+          {selectedIds.length > 0 && (
+            <div className="flex items-center gap-0.5 mr-1">
+              {selectedIds.slice(0, 3).map(id => {
+                const config = availableIndicators.find(i => i.id === id)
+                if (!config) return null
+                return (
+                  <button
+                    key={id}
+                    onClick={(e) => { e.stopPropagation(); toggleIndicator(id) }}
+                    className="flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-mono bg-white/5 hover:bg-white/10 transition-colors"
+                    style={{ color: config.color }}
+                    title={`Remove ${config.label}`}
+                  >
+                    {config.label}
+                    <span className="text-[var(--text-tertiary)]">&times;</span>
+                  </button>
+                )
+              })}
+              {selectedIds.length > 3 && (
+                <span className="text-[10px] text-[var(--text-tertiary)]">+{selectedIds.length - 3}</span>
+              )}
+            </div>
+          )}
           <IndicatorsDropdown
             indicators={availableIndicators}
             selectedIds={selectedIds}
             onToggle={toggleIndicator}
-            disabled={status !== 'connected'}
+            disabled={status !== 'connected' && status !== 'error'}
           />
+          {/* Layout selector (only in single-pane mode) */}
+          {showLayoutSelector && layoutValue && onLayoutChange && (
+            <div onClick={e => e.stopPropagation()}>
+              <LayoutSelector value={layoutValue} onChange={onLayoutChange} />
+            </div>
+          )}
           {/* Connection dot */}
           <span className={`w-1.5 h-1.5 rounded-full ${
             status === 'connected' ? 'bg-[var(--green-up)]' :
@@ -467,8 +476,23 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
       <div className="relative flex-1">
         <div ref={containerRef} className="w-full h-full" />
 
-        {(status === 'connecting' || candles.length < 5) && (
+        {/* Delayed data banner for equities */}
+        {showDelayedBanner && candles.length > 0 && (
+          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-center gap-1 py-0.5 bg-[rgba(0,0,0,0.6)] text-[11px] text-amber-400/80">
+            <span>Delayed data (Yahoo Finance)</span>
+            <span className="text-[var(--text-tertiary)]">&middot;</span>
+            <span className="text-[var(--text-tertiary)] cursor-default">Connect a broker for live data</span>
+          </div>
+        )}
+
+        {(status === 'connecting' || (candles.length < 5 && status !== 'error')) && (
           <LoadingOverlay message={status === 'connecting' ? 'Connecting...' : 'Loading...'} />
+        )}
+
+        {status === 'error' && candles.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="text-sm text-[var(--red-down)]">Failed to load data for {symbol}</p>
+          </div>
         )}
       </div>
     </div>

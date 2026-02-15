@@ -76,6 +76,30 @@ INDICATORS: dict[str, dict] = {
         "call": lambda df, **p: df.ta.vwap(**p),
         "rename": {"VWAP": "vwap"},
     },
+    "mfi": {
+        "description": "Money Flow Index",
+        "defaults": {"length": 14},
+        "call": lambda df, **p: df.ta.mfi(**p),
+        "rename": {"MFI": "mfi"},
+    },
+    "cci": {
+        "description": "Commodity Channel Index",
+        "defaults": {"length": 20},
+        "call": lambda df, **p: df.ta.cci(**p),
+        "rename": {"CCI": "cci"},
+    },
+    "willr": {
+        "description": "Williams %R",
+        "defaults": {"length": 14},
+        "call": lambda df, **p: df.ta.willr(**p),
+        "rename": {"WILLR": "willr"},
+    },
+    "cmf": {
+        "description": "Chaikin Money Flow",
+        "defaults": {"length": 20},
+        "call": lambda df, **p: df.ta.cmf(**p),
+        "rename": {"CMF": "cmf"},
+    },
 }
 
 

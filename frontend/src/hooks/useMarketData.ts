@@ -53,7 +53,6 @@ function getDateRange(interval: string): { start: string; end: string } {
 
 // Convert symbol format: BTC-USD (Coinbase format)
 function toCoinbaseSymbol(symbol: string): string {
-  // Handle common formats
   if (symbol.includes('-')) return symbol
   if (symbol.endsWith('USD')) {
     return symbol.replace('USD', '-USD')
@@ -64,12 +63,22 @@ function toCoinbaseSymbol(symbol: string): string {
   return symbol
 }
 
+// Detect if a symbol is crypto (has live WebSocket data) or equity (REST only)
+export function isCryptoSymbol(symbol: string): boolean {
+  // Symbols with "/" are ccxt crypto pairs (BTC/USDT)
+  if (symbol.includes('/')) return true
+  // Symbols ending in -USD are Coinbase crypto (BTC-USD)
+  if (symbol.endsWith('-USD') || symbol.endsWith('-USDT')) return true
+  return false
+}
+
 export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m') {
   const { equitySource } = useDataSettings()
+  const isCrypto = isCryptoSymbol(symbol)
   const coinbaseSymbol = toCoinbaseSymbol(symbol)
   const [candles, setCandles] = useState<Candle[]>([])
   const [currentCandle, setCurrentCandle] = useState<Candle | null>(null)
-  const [status, setStatus] = useState<WSStatus>('connecting')
+  const [status, setStatus] = useState<WSStatus>(isCrypto ? 'connecting' : 'connected')
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMoreHistory, setHasMoreHistory] = useState(true)
   const wsRef = useRef<WSClient | null>(null)
@@ -80,18 +89,22 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
     setCandles([])
     setCurrentCandle(null)
     setHasMoreHistory(true)
+    if (!isCrypto) setStatus('connected')
     let cancelled = false
 
     async function loadHistory() {
       try {
-        if (COINBASE_INTERVALS.has(interval)) {
+        if (isCrypto && COINBASE_INTERVALS.has(interval)) {
+          // Crypto with Coinbase-supported interval: use Coinbase REST
           const history = await fetchHistoricalCandles(coinbaseSymbol, interval, 300)
           if (!cancelled && history.length > 0) {
             setCandles(history)
           }
         } else {
+          // Equity or non-Coinbase interval: use backend API
           const { start, end } = getDateRange(interval)
-          const res = await fetchOHLCV(coinbaseSymbol, interval, start, end, equitySource)
+          const apiSymbol = isCrypto ? coinbaseSymbol : symbol
+          const res = await fetchOHLCV(apiSymbol, interval, start, end, equitySource)
           if (!cancelled && res.data?.length > 0) {
             const history: Candle[] = res.data.map((d: { date: string; open: number; high: number; low: number; close: number; volume: number }) => ({
               time: Math.floor(new Date(d.date).getTime() / 1000),
@@ -102,10 +115,12 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
               volume: d.volume,
             }))
             setCandles(history)
+            if (!isCrypto) setStatus('connected')
           }
         }
       } catch (error) {
         console.error('Failed to fetch historical candles:', error)
+        if (!cancelled && !isCrypto) setStatus('error')
       }
     }
 
@@ -114,14 +129,15 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
     return () => {
       cancelled = true
     }
-  }, [coinbaseSymbol, interval, equitySource])
+  }, [coinbaseSymbol, symbol, interval, equitySource, isCrypto])
 
-  // Connect to Coinbase WebSocket for real-time ticker updates
+  // Connect to Coinbase WebSocket for real-time ticker updates (crypto only)
   useEffect(() => {
+    if (!isCrypto) return // Skip WebSocket for equities
+
     const handleMessage = (data: unknown) => {
       if (!isCoinbaseTickerMessage(data)) return
 
-      // Throttle to prevent too many updates
       const now = Date.now()
       if (now - lastUpdateRef.current < 500) return
       lastUpdateRef.current = now
@@ -130,19 +146,14 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
       const volume = parseFloat(data.last_size || '0')
       const time = Math.floor(new Date(data.time).getTime() / 1000)
 
-      // Round time down to current candle interval
       const intervalSeconds = INTERVAL_SECONDS[interval] || 60
       const candleTime = Math.floor(time / intervalSeconds) * intervalSeconds
 
       setCandles(prev => {
         if (prev.length === 0) {
-          // Create first candle from ticker
           return [{
             time: candleTime,
-            open: price,
-            high: price,
-            low: price,
-            close: price,
+            open: price, high: price, low: price, close: price,
             volume,
           }]
         }
@@ -152,7 +163,6 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
         const lastCandle = newCandles[lastIdx]
 
         if (lastCandle.time === candleTime) {
-          // Update existing candle
           newCandles[lastIdx] = {
             ...lastCandle,
             high: Math.max(lastCandle.high, price),
@@ -161,16 +171,12 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
             volume: (lastCandle.volume || 0) + volume,
           }
         } else if (candleTime > lastCandle.time) {
-          // New candle - use last close as open
           newCandles.push({
             time: candleTime,
             open: lastCandle.close,
-            high: price,
-            low: price,
-            close: price,
+            high: price, low: price, close: price,
             volume,
           })
-          // Keep limited number
           if (newCandles.length > MAX_CANDLES) newCandles.shift()
         }
 
@@ -179,10 +185,7 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
 
       setCurrentCandle({
         time: candleTime,
-        open: price,
-        high: price,
-        low: price,
-        close: price,
+        open: price, high: price, low: price, close: price,
         volume,
       })
     }
@@ -192,7 +195,6 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
       onMessage: handleMessage,
       onStatusChange: setStatus,
       onConnect: () => {
-        // Subscribe to ticker channel
         wsRef.current?.send(createSubscribeMessage(coinbaseSymbol))
       },
     })
@@ -202,12 +204,18 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
     return () => {
       wsRef.current?.disconnect()
     }
-  }, [coinbaseSymbol, interval])
+  }, [coinbaseSymbol, interval, isCrypto])
 
   // Load more historical candles (for lazy loading on scroll)
   const loadMoreHistory = useCallback(async () => {
     if (isLoadingMore || !hasMoreHistory || candles.length === 0) return
-    if (candles.length >= MAX_CANDLES || !COINBASE_INTERVALS.has(interval)) {
+    if (candles.length >= MAX_CANDLES) {
+      setHasMoreHistory(false)
+      return
+    }
+
+    // Only Coinbase REST supports cursor-based pagination
+    if (!isCrypto || !COINBASE_INTERVALS.has(interval)) {
       setHasMoreHistory(false)
       return
     }
@@ -215,7 +223,6 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
     setIsLoadingMore(true)
     try {
       const earliestCandle = candles[0]
-      // Coinbase endTime is in seconds
       const endTime = earliestCandle.time
       const olderCandles = await fetchHistoricalCandles(coinbaseSymbol, interval, 300, endTime)
 
@@ -223,10 +230,8 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
         setHasMoreHistory(false)
       } else {
         setCandles(prev => {
-          // Filter out any overlap
           const filteredOlder = olderCandles.filter(c => c.time < prev[0].time)
           const combined = [...filteredOlder, ...prev]
-          // Cap at MAX_CANDLES
           if (combined.length > MAX_CANDLES) {
             return combined.slice(combined.length - MAX_CANDLES)
           }
@@ -238,7 +243,7 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
     } finally {
       setIsLoadingMore(false)
     }
-  }, [candles, coinbaseSymbol, interval, isLoadingMore, hasMoreHistory])
+  }, [candles, coinbaseSymbol, interval, isLoadingMore, hasMoreHistory, isCrypto])
 
-  return { candles, currentCandle, status, symbol: coinbaseSymbol, loadMoreHistory, isLoadingMore, hasMoreHistory }
+  return { candles, currentCandle, status, symbol: isCrypto ? coinbaseSymbol : symbol, isCrypto, loadMoreHistory, isLoadingMore, hasMoreHistory }
 }

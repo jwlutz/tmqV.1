@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 
 interface TickerDropdownProps {
   value: string
@@ -6,29 +6,27 @@ interface TickerDropdownProps {
   disabled?: boolean
 }
 
+const COMMON_SYMBOLS = {
+  crypto: [
+    'BTC-USD', 'ETH-USD', 'SOL-USD', 'DOGE-USD', 'ADA-USD',
+    'XRP-USD', 'AVAX-USD', 'DOT-USD', 'LINK-USD', 'MATIC-USD',
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT',
+  ],
+  equities: [
+    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
+    'JPM', 'V', 'JNJ', 'WMT', 'PG', 'MA', 'HD', 'DIS', 'BAC', 'XOM',
+    'KO', 'PEP', 'COST', 'ABBV', 'MRK', 'TMO', 'CSCO', 'ACN', 'MCD',
+    'NKE', 'INTC', 'AMD', 'CRM', 'NFLX', 'QCOM', 'TXN', 'AMAT',
+    'SPY', 'QQQ', 'IWM', 'DIA', 'VOO', 'VTI', 'ARKK',
+    'GLD', 'SLV', 'GC=F', 'SI=F', 'CL=F',
+  ],
+}
+
 export function TickerDropdown({ value, onChange, disabled }: TickerDropdownProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [symbols, setSymbols] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  // Fetch symbols once on mount
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    fetch('/api/symbols')
-      .then(r => r.json())
-      .then((data: string[]) => {
-        if (!cancelled) setSymbols(data)
-      })
-      .catch(err => console.error('Failed to fetch symbols:', err))
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [])
 
   // Close on outside click
   useEffect(() => {
@@ -43,76 +41,124 @@ export function TickerDropdown({ value, onChange, disabled }: TickerDropdownProp
 
   // Focus input when dropdown opens
   useEffect(() => {
-    if (open) inputRef.current?.focus()
+    if (open) {
+      setSearch('')
+      inputRef.current?.focus()
+    }
   }, [open])
 
-  // Convert ccxt format (BTC/USD) to Coinbase format (BTC-USD)
-  function toCoinbase(s: string) {
-    return s.replace('/', '-')
-  }
+  const query = search.toLowerCase()
 
-  // Convert Coinbase format back for display
-  function toDisplay(s: string) {
-    return s.replace('-', '/')
-  }
-
-  const filtered = symbols.filter(s =>
-    s.toLowerCase().includes(search.toLowerCase())
+  const filteredCrypto = useMemo(
+    () => COMMON_SYMBOLS.crypto.filter(s => s.toLowerCase().includes(query)),
+    [query]
   )
+
+  const filteredEquities = useMemo(
+    () => COMMON_SYMBOLS.equities.filter(s => s.toLowerCase().includes(query)),
+    [query]
+  )
+
+  const hasResults = filteredCrypto.length > 0 || filteredEquities.length > 0
+
+  function handleSelect(symbol: string) {
+    onChange(symbol)
+    setOpen(false)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && search.trim()) {
+      handleSelect(search.trim().toUpperCase())
+    }
+    if (e.key === 'Escape') {
+      setOpen(false)
+    }
+  }
 
   return (
     <div ref={containerRef} className="relative">
       <button
-        onClick={() => { if (!disabled) { setOpen(!open); setSearch('') } }}
+        onClick={() => { if (!disabled) setOpen(!open) }}
         disabled={disabled}
         className={`flex items-center gap-1.5 px-2 py-1 rounded text-sm font-mono font-semibold
           bg-[var(--bg-darker)] border border-[var(--border)]
           ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--text-secondary)] cursor-pointer'}
           text-[var(--text-primary)] transition-colors`}
       >
-        {toDisplay(value)}
+        {value}
         <svg className="w-3 h-3 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-56 bg-[var(--bg-darker)] border border-[var(--border)] rounded shadow-lg z-50 overflow-hidden">
+        <div className="absolute top-full left-0 mt-1 w-56 bg-[#0d1119] border border-[rgba(255,255,255,0.1)] rounded shadow-[0_4px_20px_rgba(0,0,0,0.5)] z-50 overflow-hidden">
           <div className="p-2 border-b border-[var(--border)]">
             <input
               ref={inputRef}
               type="text"
-              placeholder="Search symbols..."
+              placeholder="Search or type symbol..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full px-2 py-1 bg-[var(--bg-dark)] border border-[var(--border)] rounded text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] outline-none focus:border-[var(--text-secondary)]"
+              onKeyDown={handleKeyDown}
+              className="w-full px-2 py-1 bg-[var(--bg-dark)] border border-[var(--border)] rounded text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] outline-none focus:border-[var(--text-secondary)]"
             />
+            {search.trim() && (
+              <p className="text-[10px] text-[var(--text-tertiary)] mt-1 px-0.5">
+                Press Enter to load "{search.trim().toUpperCase()}"
+              </p>
+            )}
           </div>
-          <ul className="max-h-60 overflow-y-auto">
-            {loading && (
-              <li className="px-3 py-2 text-sm text-[var(--text-secondary)]">Loading...</li>
+          <div className="max-h-60 overflow-y-auto">
+            {/* Crypto section */}
+            {filteredCrypto.length > 0 && (
+              <>
+                <div className="px-3 py-1 text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider bg-[rgba(255,255,255,0.02)]">
+                  Crypto
+                </div>
+                {filteredCrypto.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => handleSelect(s)}
+                    className={`w-full text-left px-3 py-1.5 text-sm font-mono hover:bg-[var(--bg-medium)] transition-colors ${
+                      s === value ? 'text-[var(--green-up)]' : 'text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </>
             )}
-            {!loading && filtered.length === 0 && (
-              <li className="px-3 py-2 text-sm text-[var(--text-secondary)]">No results</li>
+
+            {/* Equities section */}
+            {filteredEquities.length > 0 && (
+              <>
+                <div className="px-3 py-1 text-[10px] text-[var(--text-tertiary)] uppercase tracking-wider bg-[rgba(255,255,255,0.02)]">
+                  Equities / ETFs
+                </div>
+                {filteredEquities.map(s => (
+                  <button
+                    key={s}
+                    onClick={() => handleSelect(s)}
+                    className={`w-full text-left px-3 py-1.5 text-sm font-mono hover:bg-[var(--bg-medium)] transition-colors ${
+                      s === value ? 'text-[var(--green-up)]' : 'text-[var(--text-primary)]'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </>
             )}
-            {filtered.map(s => (
-              <li key={s}>
-                <button
-                  onClick={() => {
-                    onChange(toCoinbase(s))
-                    setOpen(false)
-                  }}
-                  className={`w-full text-left px-3 py-1.5 text-sm font-mono hover:bg-[var(--bg-dark)] transition-colors ${
-                    toCoinbase(s) === value
-                      ? 'text-[var(--green-up)]'
-                      : 'text-[var(--text-primary)]'
-                  }`}
-                >
-                  {s}
-                </button>
-              </li>
-            ))}
-          </ul>
+
+            {!hasResults && !search.trim() && (
+              <p className="px-3 py-2 text-sm text-[var(--text-tertiary)]">Start typing to search...</p>
+            )}
+            {!hasResults && search.trim() && (
+              <p className="px-3 py-2 text-sm text-[var(--text-tertiary)]">
+                No matches. Press Enter to try "{search.trim().toUpperCase()}"
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

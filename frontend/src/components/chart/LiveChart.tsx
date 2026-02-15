@@ -363,6 +363,10 @@ export function LiveChart() {
       case 'adx': return 'adx'
       case 'vwap': return 'vwap'
       case 'obv': return 'obv'
+      case 'mfi': return 'mfi'
+      case 'cci': return 'cci'
+      case 'willr': return 'willr'
+      case 'cmf': return 'cmf'
       default: return 'value'
     }
   }

@@ -54,13 +54,15 @@ export interface APIBacktestResult {
 export interface ChartPaneState {
   id: string;
   symbol: string;
+  interval: string;
   indicators: string[]; // selected indicator IDs
 }
 
 const DEFAULT_SYMBOL = 'BTC-USD';
+const DEFAULT_INTERVAL = '1d';
 
-function createPane(id: string, symbol: string = DEFAULT_SYMBOL): ChartPaneState {
-  return { id, symbol, indicators: [] };
+function createPane(id: string, symbol: string = DEFAULT_SYMBOL, interval: string = DEFAULT_INTERVAL): ChartPaneState {
+  return { id, symbol, interval, indicators: [] };
 }
 
 interface AppContextValue {
@@ -97,6 +99,7 @@ interface AppContextValue {
   activePaneId: string;
   setActivePaneId: (id: string) => void;
   setPaneSymbol: (paneId: string, symbol: string) => void;
+  setPaneInterval: (paneId: string, interval: string) => void;
   // Code panel
   codePanelOpen: boolean;
   setCodePanelOpen: (open: boolean) => void;
@@ -145,10 +148,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (result) setMode('backtest');
   }, []);
 
+  // Global interval "sync all" — sets interval on ALL panes
   const handleSetInterval = useCallback((newInterval: string) => {
     setIntervalState(newInterval);
     setBacktestResult(null);
     setMode('live');
+    setPanes(prev => prev.map(p => ({ ...p, interval: newInterval })));
+  }, []);
+
+  const setPaneInterval = useCallback((paneId: string, newInterval: string) => {
+    setPanes(prev => prev.map(p =>
+      p.id === paneId ? { ...p, interval: newInterval } : p
+    ));
+    // Sync global interval if active pane changes
+    if (paneId === activePaneIdRef.current) {
+      setIntervalState(newInterval);
+    }
   }, []);
 
   // Keep global symbol in sync with active pane
@@ -170,9 +185,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const handleSetActivePaneId = useCallback((id: string) => {
     setActivePaneIdState(id);
-    // Sync global symbol with newly active pane using ref
+    // Sync global symbol and interval with newly active pane using ref
     const pane = panesRef.current.find(p => p.id === id);
-    if (pane) setSymbolState(pane.symbol);
+    if (pane) {
+      setSymbolState(pane.symbol);
+      setIntervalState(pane.interval);
+    }
   }, []);
 
   const setLayout = useCallback((newLayout: ChartLayout) => {
@@ -231,6 +249,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       panes, activePaneId,
       setActivePaneId: handleSetActivePaneId,
       setPaneSymbol,
+      setPaneInterval,
       // Code panel
       codePanelOpen, setCodePanelOpen,
       sandboxCode, setSandboxCode,
@@ -279,8 +298,8 @@ export function useDataSettings() {
 }
 
 export function useChartLayout() {
-  const { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol } = useAppContext();
-  return { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol };
+  const { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol, setPaneInterval } = useAppContext();
+  return { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol, setPaneInterval };
 }
 
 export function useCodePanel() {

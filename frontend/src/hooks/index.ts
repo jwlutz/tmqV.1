@@ -1,4 +1,4 @@
-export { useMarketData } from './useMarketData'
+export { useMarketData, isCryptoSymbol } from './useMarketData'
 export { useChat } from './useChat'
 export { useIndicators, AVAILABLE_INDICATORS } from './useIndicators'
 export { useMarketStats, formatNumber, formatPrice } from './useMarketStats'

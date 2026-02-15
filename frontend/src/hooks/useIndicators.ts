@@ -17,6 +17,8 @@ export const AVAILABLE_INDICATORS: IndicatorConfig[] = [
   { id: 'ema-20', name: 'ema', label: 'EMA 20', color: '#f59e0b', params: { length: 20 }, pane: 'main' },
   { id: 'ema-50', name: 'ema', label: 'EMA 50', color: '#8b5cf6', params: { length: 50 }, pane: 'main' },
   { id: 'sma-20', name: 'sma', label: 'SMA 20', color: '#3b82f6', params: { length: 20 }, pane: 'main' },
+  { id: 'sma-50', name: 'sma', label: 'SMA 50', color: '#0ea5e9', params: { length: 50 }, pane: 'main' },
+  { id: 'sma-200', name: 'sma', label: 'SMA 200', color: '#ef4444', params: { length: 200 }, pane: 'main' },
   { id: 'vwap', name: 'vwap', label: 'VWAP', color: '#06b6d4', params: {}, pane: 'main' },
 
   // Bands (overlay on price)
@@ -24,11 +26,15 @@ export const AVAILABLE_INDICATORS: IndicatorConfig[] = [
 
   // Bounded Oscillators (0-100)
   { id: 'rsi-14', name: 'rsi', label: 'RSI', color: '#ec4899', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [30, 70] },
+  { id: 'mfi-14', name: 'mfi', label: 'MFI', color: '#10b981', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [20, 80] },
   { id: 'stoch', name: 'stoch', label: 'Stochastic', color: '#f97316', params: { k: 14, d: 3 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [20, 80] },
+  { id: 'willr', name: 'willr', label: 'Williams %R', color: '#8b5cf6', params: { length: 14 }, pane: 'separate', bounds: { min: -100, max: 0 }, levels: [-20, -80] },
   { id: 'adx-14', name: 'adx', label: 'ADX', color: '#a855f7', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [25, 50] },
 
   // Unbounded Oscillators (auto-scale)
   { id: 'macd', name: 'macd', label: 'MACD', color: '#14b8a6', params: {}, pane: 'separate', levels: [0] },
+  { id: 'cci-20', name: 'cci', label: 'CCI', color: '#f43f5e', params: { length: 20 }, pane: 'separate', levels: [-100, 100] },
+  { id: 'cmf-20', name: 'cmf', label: 'CMF', color: '#22c55e', params: { length: 20 }, pane: 'separate', levels: [0] },
   { id: 'atr-14', name: 'atr', label: 'ATR', color: '#eab308', params: { length: 14 }, pane: 'separate' },
   { id: 'obv', name: 'obv', label: 'OBV', color: '#64748b', params: {}, pane: 'separate' },
 ];
@@ -124,10 +130,10 @@ export function useIndicators({ symbol, interval = '1d', startDate, endDate }: U
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIds, apiSymbol, interval, startDate, endDate]);
 
-  // Clear cached data when symbol changes
+  // Clear cached data when symbol or interval changes
   useEffect(() => {
     setIndicatorData(new Map());
-  }, [symbol]);
+  }, [symbol, interval]);
 
   // Get active indicator data (selected + loaded)
   const activeIndicators = Array.from(indicatorData.values()).filter(

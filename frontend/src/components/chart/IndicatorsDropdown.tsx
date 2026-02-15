@@ -49,7 +49,7 @@ export function IndicatorsDropdown({ indicators, selectedIds, onToggle, disabled
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-48 bg-[var(--bg-darker)] border border-[var(--border)] rounded shadow-lg z-50">
+        <div className="absolute top-full left-0 mt-1 w-48 bg-[#0d1119] border border-[rgba(255,255,255,0.1)] rounded shadow-[0_4px_20px_rgba(0,0,0,0.5)] z-50">
           <div className="p-2 border-b border-[var(--border)]">
             <span className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider">Toggle Indicators</span>
           </div>

@@ -4,21 +4,18 @@ const INTERVALS = [
   { label: '1m', value: '1m' },
   { label: '5m', value: '5m' },
   { label: '15m', value: '15m' },
-  { label: '30m', value: '30m' },
   { label: '1H', value: '1h' },
   { label: '4H', value: '4h' },
   { label: '1D', value: '1d' },
   { label: '1W', value: '1wk' },
-  { label: '1M', value: '1mo' },
 ]
 
-interface IntervalDropdownProps {
+interface PaneIntervalSelectorProps {
   value: string
   onChange: (interval: string) => void
-  disabled?: boolean
 }
 
-export function IntervalDropdown({ value, onChange, disabled }: IntervalDropdownProps) {
+export function PaneIntervalSelector({ value, onChange }: PaneIntervalSelectorProps) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -35,17 +32,16 @@ export function IntervalDropdown({ value, onChange, disabled }: IntervalDropdown
   const currentLabel = INTERVALS.find(i => i.value === value)?.label || value
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative" onClick={e => e.stopPropagation()}>
       <button
-        onClick={() => !disabled && setOpen(!open)}
-        disabled={disabled}
-        className={`flex items-center gap-1 px-2 py-1 rounded text-sm font-mono
-          bg-[var(--bg-darker)] border border-[var(--border)]
-          ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--text-secondary)] cursor-pointer'}
-          text-[var(--text-primary)] transition-colors`}
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-mono
+          bg-white/5 border border-[var(--border)]
+          hover:border-[var(--text-secondary)] cursor-pointer
+          text-[var(--text-primary)] transition-colors"
       >
         {currentLabel}
-        <svg className="w-3 h-3 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-2.5 h-2.5 text-[var(--text-tertiary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
@@ -56,7 +52,7 @@ export function IntervalDropdown({ value, onChange, disabled }: IntervalDropdown
             <button
               key={val}
               onClick={() => { onChange(val); setOpen(false) }}
-              className={`block w-full text-left px-3 py-1.5 text-sm font-mono hover:bg-[var(--bg-dark)] transition-colors
+              className={`block w-full text-left px-2.5 py-1 text-[11px] font-mono hover:bg-[var(--bg-medium)] transition-colors whitespace-nowrap
                 ${val === value ? 'text-[var(--green-up)]' : 'text-[var(--text-primary)]'}`}
             >
               {label}
