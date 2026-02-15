@@ -14,7 +14,10 @@ from .tools import TOOLS
 
 
 def execute_tool(name: str, args: dict) -> str:
-    """Execute a tool call and return JSON string result."""
+    """Execute a tool call and return JSON string result.
+
+    Note: AI tools always use yfinance (free, no API key needed).
+    """
     try:
         if name == "tmq_price":
             df = fetch_ohlcv(

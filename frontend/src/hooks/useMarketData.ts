@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { WSClient, fetchHistoricalCandles, isCoinbaseTickerMessage, createSubscribeMessage } from '../lib'
 import { fetchOHLCV } from '../api/client'
+import { useDataSettings } from '../context'
 
 export interface Candle {
   time: number  // Unix timestamp in seconds
@@ -64,6 +65,7 @@ function toCoinbaseSymbol(symbol: string): string {
 }
 
 export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m') {
+  const { equitySource } = useDataSettings()
   const coinbaseSymbol = toCoinbaseSymbol(symbol)
   const [candles, setCandles] = useState<Candle[]>([])
   const [currentCandle, setCurrentCandle] = useState<Candle | null>(null)
@@ -89,7 +91,7 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
           }
         } else {
           const { start, end } = getDateRange(interval)
-          const res = await fetchOHLCV(coinbaseSymbol, interval, start, end)
+          const res = await fetchOHLCV(coinbaseSymbol, interval, start, end, equitySource)
           if (!cancelled && res.data?.length > 0) {
             const history: Candle[] = res.data.map((d: { date: string; open: number; high: number; low: number; close: number; volume: number }) => ({
               time: Math.floor(new Date(d.date).getTime() / 1000),
@@ -112,7 +114,7 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
     return () => {
       cancelled = true
     }
-  }, [coinbaseSymbol, interval])
+  }, [coinbaseSymbol, interval, equitySource])
 
   // Connect to Coinbase WebSocket for real-time ticker updates
   useEffect(() => {

@@ -9,6 +9,7 @@ requires-python = ">=3.10"
 dependencies = [
     "yfinance",
     "ccxt",
+    "alpaca-py",
     "pandas",
     "numpy",
     "pydantic",

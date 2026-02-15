@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useMode, useChatSettings, useDataSettings, AlpacaCredentials, PolygonCredentials } from '../../context'
+import { configureDataProvider } from '../../api/client'
 
 // AI Providers and Models
 const AI_VENDORS = [
@@ -66,6 +67,7 @@ export function TopBar() {
   const { apiKey, setApiKey, model, setModel, aiVendor, setAiVendor } = useChatSettings()
   const { cryptoExchange, setCryptoExchange, equitySource, setEquitySource, providerCredentials, setProviderCredential } = useDataSettings()
   const [showSettings, setShowSettings] = useState(false)
+  const [alpacaStatus, setAlpacaStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const settingsRef = useRef<HTMLDivElement>(null)
 
   // Get models for current AI vendor
@@ -75,6 +77,17 @@ export function TopBar() {
   const alpacaCreds = providerCredentials.alpaca || { apiKey: '', secretKey: '', endpoint: 'paper' as const }
   const updateAlpacaCreds = (partial: Partial<AlpacaCredentials>) => {
     setProviderCredential('alpaca', { ...alpacaCreds, ...partial })
+  }
+
+  const handleAlpacaConnect = async () => {
+    if (!alpacaCreds.apiKey || !alpacaCreds.secretKey) return
+    setAlpacaStatus('connecting')
+    try {
+      const res = await configureDataProvider('alpaca', alpacaCreds.apiKey, alpacaCreds.secretKey)
+      setAlpacaStatus(res.status === 'ok' ? 'connected' : 'error')
+    } catch {
+      setAlpacaStatus('error')
+    }
   }
 
   // Polygon credential handlers
@@ -247,6 +260,22 @@ export function TopBar() {
                                    focus:border-[var(--text-secondary)]"
                       />
                     </div>
+                    <button
+                      onClick={handleAlpacaConnect}
+                      disabled={!alpacaCreds.apiKey || !alpacaCreds.secretKey || alpacaStatus === 'connecting'}
+                      className={`w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        alpacaStatus === 'connected'
+                          ? 'bg-[var(--green-up)]/20 text-[var(--green-up)] border border-[var(--green-up)]/30'
+                          : alpacaStatus === 'error'
+                            ? 'bg-[var(--red-down)]/20 text-[var(--red-down)] border border-[var(--red-down)]/30'
+                            : 'bg-white/5 text-[var(--text-primary)] border border-[var(--border)] hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed'
+                      }`}
+                    >
+                      {alpacaStatus === 'connecting' ? 'Connecting...'
+                        : alpacaStatus === 'connected' ? 'Connected'
+                        : alpacaStatus === 'error' ? 'Connection Failed — Retry'
+                        : 'Connect'}
+                    </button>
                   </>
                 )}
 

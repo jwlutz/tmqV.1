@@ -108,11 +108,26 @@ export async function fetchOHLCV(
   symbol: string,
   interval: string,
   start: string,
-  end: string
+  end: string,
+  equityProvider: string = "yfinance"
 ) {
-  const params = new URLSearchParams({ symbol, interval, start, end });
+  const params = new URLSearchParams({ symbol, interval, start, end, equity_provider: equityProvider });
   const res = await fetch(`${BASE_URL}/api/data/ohlcv?${params}`);
   if (!res.ok) throw new Error(`OHLCV fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function configureDataProvider(
+  provider: string,
+  apiKey: string,
+  apiSecret: string
+): Promise<{ status: string; provider?: string; message?: string }> {
+  const res = await fetch(`${BASE_URL}/api/data/configure`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, api_key: apiKey, api_secret: apiSecret }),
+  });
+  if (!res.ok) throw new Error(`Configure provider failed: ${res.statusText}`);
   return res.json();
 }
 
