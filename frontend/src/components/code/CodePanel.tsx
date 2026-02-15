@@ -1,0 +1,156 @@
+import { useState, useCallback } from 'react'
+import Editor from '@monaco-editor/react'
+import { useCodePanel, useChartLayout, useInterval, useBacktest, APIBacktestResult } from '../../context'
+import { runCustomBacktest } from '../../api/client'
+
+const DEFAULT_CODE = `def generate_signals(df):
+    """
+    df has columns: date, open, high, low, close, volume
+    Return (entries, exits) as boolean Series.
+    """
+    # Example: SMA crossover
+    fast = df['close'].rolling(10).mean()
+    slow = df['close'].rolling(30).mean()
+    entries = (fast > slow) & (fast.shift(1) <= slow.shift(1))
+    exits = (fast < slow) & (fast.shift(1) >= slow.shift(1))
+    return entries.fillna(False), exits.fillna(False)
+`
+
+// Calculate date range based on interval
+function getDateRange(interval: string): { start: string; end: string } {
+  const now = new Date()
+  const end = now.toISOString().split('T')[0]
+  let daysBack: number
+  switch (interval) {
+    case '1m': case '5m': daysBack = 2; break
+    case '15m': case '30m': daysBack = 7; break
+    case '1h': case '4h': daysBack = 30; break
+    case '1d': daysBack = 365; break
+    case '1wk': daysBack = 3 * 365; break
+    case '1mo': daysBack = 10 * 365; break
+    default: daysBack = 365
+  }
+  const startDate = new Date(now.getTime() - daysBack * 86400000)
+  return { start: startDate.toISOString().split('T')[0], end }
+}
+
+export function CodePanel() {
+  const { codePanelOpen, setCodePanelOpen, sandboxCode, setSandboxCode } = useCodePanel()
+  const { panes, activePaneId } = useChartLayout()
+  const { interval } = useInterval()
+  const { setBacktestResult } = useBacktest()
+  const [isRunning, setIsRunning] = useState(false)
+  const [lastMetrics, setLastMetrics] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const code = sandboxCode || DEFAULT_CODE
+  const activePane = panes.find(p => p.id === activePaneId)
+  const activeSymbol = activePane?.symbol || 'BTC-USD'
+
+  const handleRun = useCallback(async () => {
+    if (isRunning) return
+    setIsRunning(true)
+    setError(null)
+    setLastMetrics(null)
+
+    try {
+      // Convert symbol format for API: BTC-USD → BTC/USD
+      const apiSymbol = activeSymbol.replace('-', '/')
+      const { start, end } = getDateRange(interval)
+      const result: APIBacktestResult = await runCustomBacktest(apiSymbol, code, start, end)
+
+      setBacktestResult(result)
+
+      // Show quick metrics in header
+      const m = result.metrics
+      const parts: string[] = []
+      if (m.sharpe != null) parts.push(`Sharpe: ${m.sharpe.toFixed(2)}`)
+      if (m.total_return != null) parts.push(`Return: ${(m.total_return * 100).toFixed(1)}%`)
+      if (m.total_trades != null) parts.push(`${m.total_trades} trades`)
+      setLastMetrics(parts.join(' | '))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Backtest failed')
+    } finally {
+      setIsRunning(false)
+    }
+  }, [code, activeSymbol, interval, isRunning, setBacktestResult])
+
+  return (
+    <div className="flex flex-col border-t border-[var(--border)] bg-[var(--bg-dark)]">
+      {/* Header bar — always visible */}
+      <button
+        onClick={() => setCodePanelOpen(!codePanelOpen)}
+        className="flex items-center justify-between px-3 py-1.5 hover:bg-white/5 transition-colors cursor-pointer w-full text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-mono font-semibold text-[var(--text-secondary)]">
+            {'</>'} CODE
+          </span>
+          <span className="text-xs text-[var(--text-tertiary)]">
+            {codePanelOpen ? '\u25BC' : '\u25B6'}
+          </span>
+          {lastMetrics && !codePanelOpen && (
+            <span className="text-xs font-mono text-[var(--green-up)] ml-2">{lastMetrics}</span>
+          )}
+          {error && !codePanelOpen && (
+            <span className="text-xs font-mono text-[var(--red-down)] ml-2">{error}</span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {lastMetrics && codePanelOpen && (
+            <span className="text-xs font-mono text-[var(--green-up)]">{lastMetrics}</span>
+          )}
+          {error && codePanelOpen && (
+            <span className="text-xs font-mono text-[var(--red-down)] truncate max-w-[200px]">{error}</span>
+          )}
+          <span className="text-xs text-[var(--text-tertiary)] font-mono">{activeSymbol}</span>
+          <button
+            onClick={handleRun}
+            disabled={isRunning}
+            className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+              isRunning
+                ? 'bg-white/5 text-[var(--text-tertiary)] cursor-not-allowed'
+                : 'bg-[var(--green-up)] text-[var(--bg-darkest)] hover:brightness-110'
+            }`}
+          >
+            {isRunning ? (
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                Running
+              </span>
+            ) : (
+              'Run \u25B6'
+            )}
+          </button>
+        </div>
+      </button>
+
+      {/* Editor — collapsible */}
+      {codePanelOpen && (
+        <div className="h-[250px] border-t border-[var(--border)]">
+          <Editor
+            height="100%"
+            defaultLanguage="python"
+            value={code}
+            onChange={(v) => setSandboxCode(v || '')}
+            theme="vs-dark"
+            options={{
+              minimap: { enabled: false },
+              wordWrap: 'on',
+              fontSize: 13,
+              lineNumbers: 'on',
+              scrollBeyondLastLine: false,
+              padding: { top: 8 },
+              renderLineHighlight: 'none',
+              overviewRulerLanes: 0,
+              hideCursorInOverviewRuler: true,
+              overviewRulerBorder: false,
+              scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
+            }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}

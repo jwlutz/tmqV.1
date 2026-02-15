@@ -7,6 +7,7 @@ export interface UseChatOptions {
   apiKey: string;
   model: string;
   onBacktestResult?: (result: APIBacktestResult) => void;
+  onCustomCode?: (code: string) => void;
 }
 
 interface UseChatReturn {
@@ -28,14 +29,14 @@ const WELCOME_MESSAGE: Message = {
   timestamp: new Date(),
 };
 
-export function useChat({ apiKey, model, onBacktestResult }: UseChatOptions): UseChatReturn {
+export function useChat({ apiKey, model, onBacktestResult, onCustomCode }: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [isTyping, setIsTyping] = useState(false);
-  // Keep conversation history for the API (role + content only)
   const historyRef = useRef<Array<{ role: string; content: string }>>([]);
-  // Ref for onBacktestResult so the streaming callback always has latest
   const onBacktestResultRef = useRef(onBacktestResult);
   onBacktestResultRef.current = onBacktestResult;
+  const onCustomCodeRef = useRef(onCustomCode);
+  onCustomCodeRef.current = onCustomCode;
 
   const sendMessage = useCallback(async (content: string) => {
     if (!apiKey) {
@@ -66,7 +67,6 @@ export function useChat({ apiKey, model, onBacktestResult }: UseChatOptions): Us
     let fullContent = '';
     let gotDone = false;
 
-    // Add placeholder assistant message for streaming
     setMessages(prev => [...prev, {
       id: assistantId,
       role: 'assistant',
@@ -95,6 +95,11 @@ export function useChat({ apiKey, model, onBacktestResult }: UseChatOptions): Us
                   ? { ...m, toolStatus: { name, status: 'running' as const } }
                   : m
               ));
+
+              // Extract code from tmq_backtest_custom calls
+              if (name === 'tmq_backtest_custom' && event.args?.code) {
+                onCustomCodeRef.current?.(event.args.code as string);
+              }
             }
             break;
 
@@ -107,7 +112,6 @@ export function useChat({ apiKey, model, onBacktestResult }: UseChatOptions): Us
                   : m
               ));
 
-              // If a backtest tool completed, parse and forward the result
               if (
                 (name === 'tmq_backtest' || name === 'tmq_backtest_custom') &&
                 event.result
@@ -133,7 +137,6 @@ export function useChat({ apiKey, model, onBacktestResult }: UseChatOptions): Us
         }
       }
 
-      // Only record complete responses in history
       if (gotDone || fullContent) {
         historyRef.current.push({ role: 'assistant', content: fullContent });
       }

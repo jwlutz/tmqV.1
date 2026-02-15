@@ -26,6 +26,8 @@ interface ChartHeaderProps {
   marketStats: MarketStats | null
   marketStatsLoading?: boolean
   disabled?: boolean
+  hideSymbol?: boolean
+  hideIndicators?: boolean
 }
 
 export function ChartHeader({
@@ -40,6 +42,8 @@ export function ChartHeader({
   marketStats,
   marketStatsLoading,
   disabled,
+  hideSymbol,
+  hideIndicators,
 }: ChartHeaderProps) {
   // Use live OHLCV close for real-time price (from WebSocket), fallback to market stats
   const currentPrice = ohlcv?.close ?? marketStats?.price
@@ -52,22 +56,26 @@ export function ChartHeader({
     <div className="flex items-center justify-between gap-3 px-2 py-1.5 bg-[var(--bg-darker)] border-b border-[var(--border)] flex-wrap">
       {/* Left: Dropdowns + Price */}
       <div className="flex items-center gap-2">
-        <TickerDropdown
-          value={symbol}
-          onChange={onSymbolChange}
-          disabled={disabled}
-        />
+        {!hideSymbol && (
+          <TickerDropdown
+            value={symbol}
+            onChange={onSymbolChange}
+            disabled={disabled}
+          />
+        )}
         <IntervalDropdown
           value={interval}
           onChange={onIntervalChange}
           disabled={disabled}
         />
-        <IndicatorsDropdown
-          indicators={indicators}
-          selectedIds={selectedIndicatorIds}
-          onToggle={onIndicatorToggle}
-          disabled={disabled}
-        />
+        {!hideIndicators && (
+          <IndicatorsDropdown
+            indicators={indicators}
+            selectedIds={selectedIndicatorIds}
+            onToggle={onIndicatorToggle}
+            disabled={disabled}
+          />
+        )}
 
         {/* Price + Change */}
         {currentPrice !== undefined && (

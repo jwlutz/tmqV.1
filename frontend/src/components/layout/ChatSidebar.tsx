@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { useMode, useBacktest, useChatSettings } from '../../context';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useMode, useBacktest, useChatSettings, useCodePanel } from '../../context';
 import { useChat } from '../../hooks';
 import { ChatMessage, ChatInput, QuickActions, TypingIndicator } from '../chat';
 
@@ -7,13 +7,21 @@ export function ChatSidebar() {
   const { mode } = useMode();
   const { setBacktestResult } = useBacktest();
   const { apiKey, model } = useChatSettings();
+  const { setCodePanelOpen, setSandboxCode } = useCodePanel();
+  const [isOpen, setIsOpen] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleCustomCode = useCallback((code: string) => {
+    setSandboxCode(code);
+    setCodePanelOpen(true);
+  }, [setSandboxCode, setCodePanelOpen]);
+
   const { messages, isTyping, sendMessage } = useChat({
     apiKey,
     model,
     onBacktestResult: setBacktestResult,
+    onCustomCode: handleCustomCode,
   });
-  const [isOpen, setIsOpen] = useState(true);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {

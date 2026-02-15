@@ -1,4 +1,7 @@
 export { LiveChart } from './LiveChart'
+export { ChartPane } from './ChartPane'
+export { ChartGrid } from './ChartGrid'
+export { LayoutSelector } from './LayoutSelector'
 export { IndicatorSelector } from './IndicatorSelector'
 export { ChartHeader } from './ChartHeader'
 export { IntervalDropdown } from './IntervalDropdown'

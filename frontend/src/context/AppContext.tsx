@@ -1,6 +1,8 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 
 type Mode = 'live' | 'backtest';
+
+export type ChartLayout = '1x1' | '1x2' | '2x2';
 
 // Provider credential types
 export interface AlpacaCredentials {
@@ -48,6 +50,19 @@ export interface APIBacktestResult {
   provider: string;
 }
 
+// Chart pane state
+export interface ChartPaneState {
+  id: string;
+  symbol: string;
+  indicators: string[]; // selected indicator IDs
+}
+
+const DEFAULT_SYMBOL = 'BTC-USD';
+
+function createPane(id: string, symbol: string = DEFAULT_SYMBOL): ChartPaneState {
+  return { id, symbol, indicators: [] };
+}
+
 interface AppContextValue {
   mode: Mode;
   setMode: (mode: Mode) => void;
@@ -75,13 +90,25 @@ interface AppContextValue {
   // Legacy alias (returns cryptoExchange for backward compat)
   dataVendor: string;
   setDataVendor: (vendor: string) => void;
+  // Multi-chart layout
+  layout: ChartLayout;
+  setLayout: (layout: ChartLayout) => void;
+  panes: ChartPaneState[];
+  activePaneId: string;
+  setActivePaneId: (id: string) => void;
+  setPaneSymbol: (paneId: string, symbol: string) => void;
+  // Code panel
+  codePanelOpen: boolean;
+  setCodePanelOpen: (open: boolean) => void;
+  sandboxCode: string;
+  setSandboxCode: (code: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<Mode>('live');
-  const [symbol, setSymbol] = useState('BTC-USD');
+  const [symbol, setSymbolState] = useState(DEFAULT_SYMBOL);
   const [interval, setIntervalState] = useState('1d');
   const [backtestResult, setBacktestResult] = useState<APIBacktestResult | null>(null);
   // AI settings
@@ -93,6 +120,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [equitySource, setEquitySource] = useState('yfinance');
   // Provider credentials
   const [providerCredentials, setProviderCredentials] = useState<ProviderCredentials>({});
+  // Multi-chart layout
+  const [layout, setLayoutState] = useState<ChartLayout>('1x1');
+  const [panes, setPanes] = useState<ChartPaneState[]>([createPane('pane-1', DEFAULT_SYMBOL)]);
+  const [activePaneId, setActivePaneIdState] = useState('pane-1');
+  // Refs for reading current state without stale closures
+  const panesRef = useRef(panes);
+  panesRef.current = panes;
+  const activePaneIdRef = useRef(activePaneId);
+  activePaneIdRef.current = activePaneId;
+  // Code panel
+  const [codePanelOpen, setCodePanelOpen] = useState(false);
+  const [sandboxCode, setSandboxCode] = useState('');
 
   const setProviderCredential = useCallback(<K extends keyof ProviderCredentials>(
     provider: K,
@@ -112,6 +151,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMode('live');
   }, []);
 
+  // Keep global symbol in sync with active pane
+  const setSymbol = useCallback((newSymbol: string) => {
+    setSymbolState(newSymbol);
+    setPanes(prev => prev.map(p =>
+      p.id === activePaneIdRef.current ? { ...p, symbol: newSymbol } : p
+    ));
+  }, []);
+
+  const setPaneSymbol = useCallback((paneId: string, newSymbol: string) => {
+    setPanes(prev => prev.map(p =>
+      p.id === paneId ? { ...p, symbol: newSymbol } : p
+    ));
+    if (paneId === activePaneIdRef.current) {
+      setSymbolState(newSymbol);
+    }
+  }, []);
+
+  const handleSetActivePaneId = useCallback((id: string) => {
+    setActivePaneIdState(id);
+    // Sync global symbol with newly active pane using ref
+    const pane = panesRef.current.find(p => p.id === id);
+    if (pane) setSymbolState(pane.symbol);
+  }, []);
+
+  const setLayout = useCallback((newLayout: ChartLayout) => {
+    setLayoutState(newLayout);
+    const currentPanes = panesRef.current;
+    const currentActive = activePaneIdRef.current;
+    let newPanes: ChartPaneState[];
+
+    if (newLayout === '1x1') {
+      const active = currentPanes.find(p => p.id === currentActive) || currentPanes[0];
+      newPanes = [{ ...active, id: 'pane-1' }];
+      setActivePaneIdState('pane-1');
+      setSymbolState(active.symbol);
+    } else if (newLayout === '1x2') {
+      if (currentPanes.length >= 2) {
+        newPanes = currentPanes.slice(0, 2);
+      } else {
+        newPanes = [
+          ...currentPanes,
+          createPane('pane-2', currentPanes[0]?.symbol || DEFAULT_SYMBOL),
+        ];
+      }
+      if (!newPanes.find(p => p.id === currentActive)) {
+        setActivePaneIdState(newPanes[0].id);
+        setSymbolState(newPanes[0].symbol);
+      }
+    } else {
+      newPanes = [...currentPanes];
+      const defaultSym = currentPanes[0]?.symbol || DEFAULT_SYMBOL;
+      while (newPanes.length < 4) {
+        newPanes.push(createPane(`pane-${newPanes.length + 1}`, defaultSym));
+      }
+      newPanes = newPanes.slice(0, 4);
+    }
+
+    setPanes(newPanes);
+  }, []);
+
   return (
     <AppContext.Provider value={{
       mode, setMode,
@@ -127,6 +226,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Legacy aliases
       dataVendor: cryptoExchange,
       setDataVendor: setCryptoExchange,
+      // Multi-chart layout
+      layout, setLayout,
+      panes, activePaneId,
+      setActivePaneId: handleSetActivePaneId,
+      setPaneSymbol,
+      // Code panel
+      codePanelOpen, setCodePanelOpen,
+      sandboxCode, setSandboxCode,
     }}>
       {children}
     </AppContext.Provider>
@@ -169,4 +276,14 @@ export function useChatSettings() {
 export function useDataSettings() {
   const { cryptoExchange, setCryptoExchange, equitySource, setEquitySource, dataVendor, setDataVendor, providerCredentials, setProviderCredential } = useAppContext();
   return { cryptoExchange, setCryptoExchange, equitySource, setEquitySource, dataVendor, setDataVendor, providerCredentials, setProviderCredential };
+}
+
+export function useChartLayout() {
+  const { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol } = useAppContext();
+  return { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol };
+}
+
+export function useCodePanel() {
+  const { codePanelOpen, setCodePanelOpen, sandboxCode, setSandboxCode } = useAppContext();
+  return { codePanelOpen, setCodePanelOpen, sandboxCode, setSandboxCode };
 }
