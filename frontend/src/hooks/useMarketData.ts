@@ -85,6 +85,8 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
   candlesRef.current = candles
   const wsRef = useRef<WSClient | null>(null)
   const lastUpdateRef = useRef<number>(0)
+  const isCryptoRef = useRef(isCrypto) // Track current crypto state to prevent stale WebSocket callbacks
+  isCryptoRef.current = isCrypto
 
   // Clear stale data and fetch fresh history when symbol changes
   useEffect(() => {
@@ -195,7 +197,12 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
     wsRef.current = new WSClient({
       url: COINBASE_WS,
       onMessage: handleMessage,
-      onStatusChange: setStatus,
+      // Only update status if still in crypto mode (prevents stale callbacks after switching to equity)
+      onStatusChange: (newStatus) => {
+        if (isCryptoRef.current) {
+          setStatus(newStatus)
+        }
+      },
       onConnect: () => {
         wsRef.current?.send(createSubscribeMessage(coinbaseSymbol))
       },

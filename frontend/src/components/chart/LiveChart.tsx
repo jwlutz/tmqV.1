@@ -1,12 +1,57 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp } from 'lightweight-charts'
-import { useMarketData } from '../../hooks'
+import { useMarketData, isCryptoSymbol } from '../../hooks'
 import { useIndicators, IndicatorData } from '../../hooks/useIndicators'
 import { useMarketStats } from '../../hooks/useMarketStats'
 import { useSymbol, useInterval } from '../../context'
 import { LoadingOverlay } from '../ui'
 import { ChartHeader, OHLCVData } from './ChartHeader'
 import { fetchOHLCV } from '../../api/client'
+
+// Align comparison data to main chart timestamps using carry-forward for gaps
+function alignComparisonData(
+  mainTimestamps: number[],
+  compareData: Array<{ time: UTCTimestamp; value: number }>
+): Array<{ time: UTCTimestamp; value: number }> {
+  if (compareData.length === 0 || mainTimestamps.length === 0) return []
+
+  // Build a map of comparison values by timestamp
+  const compareMap = new Map<number, number>()
+  compareData.forEach(d => compareMap.set(d.time, d.value))
+
+  // Sort comparison data to enable carry-forward
+  const sortedCompare = [...compareData].sort((a, b) => a.time - b.time)
+
+  const result: Array<{ time: UTCTimestamp; value: number }> = []
+  let lastKnownValue: number | null = null
+  let compareIdx = 0
+
+  // For each main timestamp, find or interpolate comparison value
+  for (const mainTime of mainTimestamps) {
+    // Check exact match first
+    if (compareMap.has(mainTime)) {
+      lastKnownValue = compareMap.get(mainTime)!
+      result.push({ time: mainTime as UTCTimestamp, value: lastKnownValue })
+      continue
+    }
+
+    // Find the most recent comparison value before this timestamp
+    while (
+      compareIdx < sortedCompare.length &&
+      sortedCompare[compareIdx].time <= mainTime
+    ) {
+      lastKnownValue = sortedCompare[compareIdx].value
+      compareIdx++
+    }
+
+    // If we have a carry-forward value, use it
+    if (lastKnownValue !== null) {
+      result.push({ time: mainTime as UTCTimestamp, value: lastKnownValue })
+    }
+  }
+
+  return result
+}
 
 export function LiveChart() {
   const { symbol: contextSymbol, setSymbol } = useSymbol()
@@ -499,11 +544,23 @@ export function LiveChart() {
 
         if (res.data?.length > 0) {
           // Convert to line series data
-          const lineData = res.data.map((d: { date: string; close: number }) => ({
+          const rawData = res.data.map((d: { date: string; close: number }) => ({
             time: Math.floor(new Date(d.date).getTime() / 1000) as UTCTimestamp,
             value: d.close,
           }))
-          setCompareData(lineData)
+
+          // Detect if we need gap alignment (crypto main + equity compare or vice versa)
+          const mainIsCrypto = isCryptoSymbol(contextSymbol)
+          const compareIsCrypto = isCryptoSymbol(compareSymbol!)
+
+          // If mixing crypto (24/7) with equity (business days), align to main chart timestamps
+          if (mainIsCrypto !== compareIsCrypto && candles.length > 0) {
+            const mainTimestamps = candles.map(c => c.time)
+            const alignedData = alignComparisonData(mainTimestamps, rawData)
+            setCompareData(alignedData)
+          } else {
+            setCompareData(rawData)
+          }
         }
       } catch (err) {
         console.warn('Failed to fetch comparison data:', err)
@@ -515,7 +572,7 @@ export function LiveChart() {
 
     fetchCompare()
     return () => { cancelled = true }
-  }, [compareSymbol, interval, dateRange.start, dateRange.end])
+  }, [compareSymbol, interval, dateRange.start, dateRange.end, contextSymbol, candles])
 
   // Render comparison series on chart
   useEffect(() => {
