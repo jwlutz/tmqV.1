@@ -1,6 +1,6 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp } from 'lightweight-charts'
-import { useMarketData } from '../../hooks'
+import { useMarketData, isCryptoSymbol } from '../../hooks'
 import { useIndicators, IndicatorData } from '../../hooks/useIndicators'
 import { useMarketStats } from '../../hooks/useMarketStats'
 import { useDataSettings } from '../../context'
@@ -9,7 +9,9 @@ import { IndicatorsDropdown } from './IndicatorsDropdown'
 import { PaneIntervalSelector } from './PaneIntervalSelector'
 import { TickerDropdown } from './TickerDropdown'
 import { LayoutSelector } from './LayoutSelector'
+import { CompareDropdown } from './CompareDropdown'
 import { formatPrice, formatNumber } from '../../hooks/useMarketStats'
+import { fetchOHLCV } from '../../api/client'
 import type { ChartLayout } from '../../context'
 
 interface ChartPaneProps {
@@ -34,11 +36,17 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
+  const compareSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const lastCandleCountRef = useRef(0)
   const earliestTimeRef = useRef<number | null>(null)
   const lastTimeRef = useRef<number | null>(null)
   const isResettingRef = useRef(false)
   const chartDisposedRef = useRef(false)
+
+  // Comparison symbol state
+  const [compareSymbol, setCompareSymbol] = useState<string | null>(null)
+  const [compareData, setCompareData] = useState<Array<{ time: UTCTimestamp; value: number }>>([])
+  const [, setCompareLoading] = useState(false)
 
   // Show delayed data banner for equities without a live provider
   const hasAlpaca = !!providerCredentials.alpaca?.apiKey
@@ -403,6 +411,146 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
     }
   }, [loadMoreHistory, isLoadingMore])
 
+  // Fetch comparison symbol data
+  useEffect(() => {
+    if (!compareSymbol || !dateRange.start || !dateRange.end) {
+      setCompareData([])
+      return
+    }
+
+    let cancelled = false
+    setCompareLoading(true)
+
+    async function fetchCompare() {
+      try {
+        const apiSymbol = compareSymbol!.replace('-', '/')
+        const res = await fetchOHLCV(apiSymbol, interval, dateRange.start!, dateRange.end!)
+        if (cancelled) return
+
+        if (res.data?.length > 0) {
+          const rawData = res.data.map((d: { date: string; close: number }) => ({
+            time: Math.floor(new Date(d.date).getTime() / 1000) as UTCTimestamp,
+            value: d.close,
+          }))
+
+          // Align timestamps if mixing crypto/equity
+          const mainIsCrypto = isCryptoSymbol(symbol)
+          const compareIsCrypto = isCryptoSymbol(compareSymbol!)
+
+          if (mainIsCrypto !== compareIsCrypto && candles.length > 0) {
+            // Carry-forward alignment for gaps
+            const mainTimestamps = candles.map(c => c.time)
+            const compareMap = new Map<number, number>()
+            rawData.forEach((d: { time: number; value: number }) => compareMap.set(d.time, d.value))
+            const sorted = [...rawData].sort((a: { time: number }, b: { time: number }) => a.time - b.time)
+
+            const aligned: Array<{ time: UTCTimestamp; value: number }> = []
+            let lastValue: number | null = null
+            let idx = 0
+
+            for (const t of mainTimestamps) {
+              if (compareMap.has(t)) {
+                lastValue = compareMap.get(t)!
+                aligned.push({ time: t as UTCTimestamp, value: lastValue })
+              } else {
+                while (idx < sorted.length && sorted[idx].time <= t) {
+                  lastValue = sorted[idx].value
+                  idx++
+                }
+                if (lastValue !== null) {
+                  aligned.push({ time: t as UTCTimestamp, value: lastValue })
+                }
+              }
+            }
+            setCompareData(aligned)
+          } else {
+            setCompareData(rawData)
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch comparison data:', err)
+        setCompareData([])
+      } finally {
+        if (!cancelled) setCompareLoading(false)
+      }
+    }
+
+    fetchCompare()
+    return () => { cancelled = true }
+  }, [compareSymbol, interval, dateRange.start, dateRange.end, symbol, candles])
+
+  // Track the current compare symbol for the series
+  const compareSymbolForSeriesRef = useRef<string | null>(null)
+
+  // Render comparison series
+  useEffect(() => {
+    if (chartDisposedRef.current || !chartRef.current) return
+    const chart = chartRef.current
+
+    // Remove series if no compare symbol
+    if (!compareSymbol) {
+      if (compareSeriesRef.current) {
+        try { chart.removeSeries(compareSeriesRef.current) } catch { /* ignore */ }
+        compareSeriesRef.current = null
+        compareSymbolForSeriesRef.current = null
+        // Hide left scale
+        chart.priceScale('left').applyOptions({ visible: false })
+      }
+      return
+    }
+
+    // If symbol changed, remove old series first
+    if (compareSeriesRef.current && compareSymbolForSeriesRef.current !== compareSymbol) {
+      try { chart.removeSeries(compareSeriesRef.current) } catch { /* ignore */ }
+      compareSeriesRef.current = null
+    }
+
+    // Wait for data before creating series
+    if (compareData.length === 0) return
+
+    // Create series if needed
+    if (!compareSeriesRef.current) {
+      try {
+        compareSeriesRef.current = chart.addSeries(LineSeries, {
+          color: '#fbbf24',
+          lineWidth: 2,
+          priceScaleId: 'left',
+          lastValueVisible: true,
+          priceLineVisible: false,
+          title: compareSymbol,
+        })
+        chart.priceScale('left').applyOptions({
+          visible: true,
+          borderColor: 'rgba(255, 191, 36, 0.3)',
+        })
+        compareSymbolForSeriesRef.current = compareSymbol
+      } catch (e) {
+        console.warn('Failed to create comparison series:', e)
+        return
+      }
+    }
+
+    try {
+      compareSeriesRef.current.setData(compareData)
+    } catch (e) {
+      console.warn('Failed to set comparison data:', e)
+    }
+  }, [compareSymbol, compareData])
+
+  // Clear comparison when main symbol changes
+  useEffect(() => {
+    // Skip initial mount
+    if (!compareSeriesRef.current && !compareSymbol) return
+
+    if (compareSeriesRef.current && chartRef.current && !chartDisposedRef.current) {
+      try { chartRef.current.removeSeries(compareSeriesRef.current) } catch { /* ignore */ }
+      compareSeriesRef.current = null
+      compareSymbolForSeriesRef.current = null
+    }
+    setCompareSymbol(null)
+    setCompareData([])
+  }, [symbol])
+
   return (
     <div
       className={`flex flex-col w-full h-full rounded-lg overflow-hidden border transition-colors ${
@@ -453,6 +601,14 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
             onToggle={toggleIndicator}
             disabled={status !== 'connected' && status !== 'error'}
           />
+          <div onClick={e => e.stopPropagation()}>
+            <CompareDropdown
+              value={compareSymbol}
+              onChange={setCompareSymbol}
+              disabled={status !== 'connected' && status !== 'error'}
+              currentSymbol={symbol}
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-1">
