@@ -1,20 +1,27 @@
-import { useState } from 'react';
-import { useMode } from '../../context';
+import { useState, useRef, useEffect } from 'react';
+import { useMode, useBacktest, useChatSettings } from '../../context';
 import { useChat } from '../../hooks';
 import { ChatMessage, ChatInput, QuickActions, TypingIndicator } from '../chat';
 
 export function ChatSidebar() {
-  const { mode, setMode } = useMode();
-  const { messages, isTyping, sendMessage } = useChat();
+  const { mode } = useMode();
+  const { setBacktestResult } = useBacktest();
+  const { apiKey, model } = useChatSettings();
+  const { messages, isTyping, sendMessage } = useChat({
+    apiKey,
+    model,
+    onBacktestResult: setBacktestResult,
+  });
   const [isOpen, setIsOpen] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleAction = (message: string, actionId: string) => {
-    console.log(`Quick action triggered: ${actionId}`);
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isTyping]);
+
+  const handleAction = (message: string) => {
     sendMessage(message);
-
-    if (actionId === 'backtest') {
-      setTimeout(() => setMode('backtest'), 2000);
-    }
   };
 
   return (
@@ -66,6 +73,7 @@ export function ChatSidebar() {
             <ChatMessage key={msg.id} message={msg} />
           ))}
           {isTyping && <TypingIndicator />}
+          <div ref={messagesEndRef} />
         </div>
 
         <ChatInput onSend={sendMessage} disabled={isTyping} />

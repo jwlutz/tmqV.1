@@ -1,0 +1,2 @@
+[console_scripts]
+tmq-mcp = tmq_mcp.server:main

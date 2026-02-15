@@ -1,3 +1,6 @@
 export { useMarketData } from './useMarketData'
 export { useChat } from './useChat'
+export { useIndicators, AVAILABLE_INDICATORS } from './useIndicators'
+export { useMarketStats, formatNumber, formatPrice } from './useMarketStats'
 export type { Candle, MarketDataState } from './useMarketData'
+export type { IndicatorConfig, IndicatorData } from './useIndicators'

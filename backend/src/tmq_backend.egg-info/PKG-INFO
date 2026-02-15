@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: tmq-backend
+Version: 0.1.0
+Requires-Python: >=3.10
+Requires-Dist: tmq-core
+Requires-Dist: fastapi
+Requires-Dist: uvicorn[standard]
+Requires-Dist: litellm
+Requires-Dist: pydantic
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: httpx; extra == "dev"

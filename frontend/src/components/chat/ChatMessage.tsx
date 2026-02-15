@@ -16,6 +16,18 @@ export function ChatMessage({ message }: ChatMessageProps) {
             : 'bg-[var(--bg-medium)] text-[var(--text-primary)] rounded-bl-md'
         }`}
       >
+        {message.toolStatus && (
+          <div className="flex items-center gap-1.5 mb-1 text-xs text-[var(--text-secondary)]">
+            {message.toolStatus.status === 'running' ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--green-up)]" />
+            )}
+            <span className="font-mono">
+              {message.toolStatus.status === 'running' ? 'Running' : 'Ran'} {message.toolStatus.name}
+            </span>
+          </div>
+        )}
         <p className="text-sm leading-relaxed whitespace-pre-wrap">
           {message.content}
         </p>

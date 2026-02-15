@@ -1,0 +1,15 @@
+[project]
+name = "tmq-mcp"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp",
+    "tmq-core",
+    "pandas",
+]
+
+[project.scripts]
+tmq-mcp = "tmq_mcp.server:main"
+
+[tool.setuptools]
+# Ensure tmq-core is installed: pip install -e ../core

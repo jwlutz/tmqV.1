@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { WSClient, fetchHistoricalCandles, isCoinbaseTickerMessage, createSubscribeMessage } from '../lib'
+import { fetchOHLCV } from '../api/client'
 
 export interface Candle {
   time: number  // Unix timestamp in seconds
@@ -23,6 +24,31 @@ export interface MarketDataState {
 const COINBASE_WS = 'wss://ws-feed.exchange.coinbase.com'
 
 const MAX_CANDLES = 5000 // Cap to avoid memory issues
+
+const COINBASE_INTERVALS = new Set(['1m', '5m', '15m', '1h', '6h', '1d'])
+
+const INTERVAL_SECONDS: Record<string, number> = {
+  '1m': 60, '5m': 300, '15m': 900, '30m': 1800,
+  '1h': 3600, '4h': 14400, '6h': 21600, '1d': 86400,
+  '1wk': 604800, '1mo': 2592000,
+}
+
+function getDateRange(interval: string): { start: string; end: string } {
+  const now = new Date()
+  const end = now.toISOString().split('T')[0]
+  let daysBack: number
+  switch (interval) {
+    case '1m': case '5m': daysBack = 2; break
+    case '15m': case '30m': daysBack = 7; break
+    case '1h': case '4h': daysBack = 30; break
+    case '1d': daysBack = 365; break
+    case '1wk': daysBack = 3 * 365; break
+    case '1mo': daysBack = 10 * 365; break
+    default: daysBack = 365
+  }
+  const startDate = new Date(now.getTime() - daysBack * 86400000)
+  return { start: startDate.toISOString().split('T')[0], end }
+}
 
 // Convert symbol format: BTC-USD (Coinbase format)
 function toCoinbaseSymbol(symbol: string): string {
@@ -56,9 +82,25 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
 
     async function loadHistory() {
       try {
-        const history = await fetchHistoricalCandles(coinbaseSymbol, interval, 200)
-        if (!cancelled && history.length > 0) {
-          setCandles(history)
+        if (COINBASE_INTERVALS.has(interval)) {
+          const history = await fetchHistoricalCandles(coinbaseSymbol, interval, 300)
+          if (!cancelled && history.length > 0) {
+            setCandles(history)
+          }
+        } else {
+          const { start, end } = getDateRange(interval)
+          const res = await fetchOHLCV(coinbaseSymbol, interval, start, end)
+          if (!cancelled && res.data?.length > 0) {
+            const history: Candle[] = res.data.map((d: { date: string; open: number; high: number; low: number; close: number; volume: number }) => ({
+              time: Math.floor(new Date(d.date).getTime() / 1000),
+              open: d.open,
+              high: d.high,
+              low: d.low,
+              close: d.close,
+              volume: d.volume,
+            }))
+            setCandles(history)
+          }
         }
       } catch (error) {
         console.error('Failed to fetch historical candles:', error)
@@ -87,7 +129,7 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
       const time = Math.floor(new Date(data.time).getTime() / 1000)
 
       // Round time down to current candle interval
-      const intervalSeconds = interval === '1m' ? 60 : interval === '5m' ? 300 : 60
+      const intervalSeconds = INTERVAL_SECONDS[interval] || 60
       const candleTime = Math.floor(time / intervalSeconds) * intervalSeconds
 
       setCandles(prev => {
@@ -163,7 +205,7 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
   // Load more historical candles (for lazy loading on scroll)
   const loadMoreHistory = useCallback(async () => {
     if (isLoadingMore || !hasMoreHistory || candles.length === 0) return
-    if (candles.length >= MAX_CANDLES) {
+    if (candles.length >= MAX_CANDLES || !COINBASE_INTERVALS.has(interval)) {
       setHasMoreHistory(false)
       return
     }
