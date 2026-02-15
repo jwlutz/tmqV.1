@@ -65,8 +65,8 @@ export function LiveChart() {
     lastTimeRef.current = null
     isResettingRef.current = true // Flag that we're in a reset state
 
-    // Skip chart operations if disposed
-    if (chartDisposedRef.current) return
+    // Skip chart operations if disposed or chart doesn't exist
+    if (chartDisposedRef.current || !chartRef.current) return
 
     // Clear candle and volume series data to prevent stale data issues
     if (candleSeriesRef.current) {
@@ -80,13 +80,25 @@ export function LiveChart() {
       } catch { /* ignore */ }
     }
 
-    // Clear indicator series (wrapped in try-catch since chart may be disposed)
-    indicatorSeriesRef.current.forEach((series) => {
-      try {
-        chartRef.current?.removeSeries(series)
-      } catch { /* ignore - chart may be disposed */ }
+    // Clear indicator series - collect valid series first, then remove
+    const seriesToRemove: Array<{ id: string; series: ISeriesApi<'Line'> }> = []
+    indicatorSeriesRef.current.forEach((series, id) => {
+      seriesToRemove.push({ id, series })
     })
+
+    // Clear the map first to prevent re-iteration issues
     indicatorSeriesRef.current.clear()
+
+    // Now remove from chart
+    const chart = chartRef.current
+    for (const { series } of seriesToRemove) {
+      try {
+        // Check if chart still has this series before removing
+        if (chart && !chartDisposedRef.current) {
+          chart.removeSeries(series)
+        }
+      } catch { /* ignore - series may already be removed or chart disposed */ }
+    }
   }, [contextSymbol, interval])
 
   // Create chart on mount
@@ -236,19 +248,33 @@ export function LiveChart() {
   useEffect(() => {
     if (chartDisposedRef.current || !chartRef.current) return
 
-    // Remove series for deselected indicators
-    indicatorSeriesRef.current.forEach((series, id) => {
+    const chart = chartRef.current
+
+    // Remove series for deselected indicators - collect IDs first to avoid modifying while iterating
+    const idsToRemove: string[] = []
+    indicatorSeriesRef.current.forEach((_series, id) => {
       const baseId = id.split('-bb_')[0] // Handle bbands sub-series
       if (!selectedIds.includes(baseId) && !selectedIds.includes(id)) {
-        try {
-          chartRef.current?.removeSeries(series)
-        } catch { /* ignore - chart may be disposed */ }
-        indicatorSeriesRef.current.delete(id)
+        idsToRemove.push(id)
       }
     })
 
+    // Now remove the collected series
+    for (const id of idsToRemove) {
+      const series = indicatorSeriesRef.current.get(id)
+      if (series && chart && !chartDisposedRef.current) {
+        try {
+          chart.removeSeries(series)
+        } catch { /* ignore - chart may be disposed */ }
+      }
+      indicatorSeriesRef.current.delete(id)
+    }
+
     // Add/update series for active indicators
     activeIndicators.forEach((indicator: IndicatorData) => {
+      // Re-check disposal state inside loop
+      if (chartDisposedRef.current || !chart) return
+
       const { config, points } = indicator
       if (points.length === 0) return
 
@@ -261,41 +287,46 @@ export function LiveChart() {
       // Get or create series
       let series = indicatorSeriesRef.current.get(config.id)
       if (!series) {
-        series = chartRef.current!.addSeries(LineSeries, {
-          color: config.color,
-          lineWidth: 1,
-          priceScaleId: config.pane === 'separate' ? config.id : 'right',
-          lastValueVisible: false,
-          priceLineVisible: false,
-          // Apply autoscale with bounds if specified
-          ...(config.bounds && {
-            autoscaleInfoProvider: () => ({
-              priceRange: { minValue: config.bounds!.min, maxValue: config.bounds!.max },
+        try {
+          series = chart.addSeries(LineSeries, {
+            color: config.color,
+            lineWidth: 1,
+            priceScaleId: config.pane === 'separate' ? config.id : 'right',
+            lastValueVisible: false,
+            priceLineVisible: false,
+            // Apply autoscale with bounds if specified
+            ...(config.bounds && {
+              autoscaleInfoProvider: () => ({
+                priceRange: { minValue: config.bounds!.min, maxValue: config.bounds!.max },
+              }),
             }),
-          }),
-        })
-
-        if (config.pane === 'separate') {
-          series.priceScale().applyOptions({
-            scaleMargins: { top: 0.8, bottom: 0.02 },
           })
-        }
 
-        // Add horizontal reference lines at configured levels
-        if (config.levels) {
-          config.levels.forEach(level => {
-            series!.createPriceLine({
-              price: level,
-              color: 'rgba(255, 255, 255, 0.3)',
-              lineWidth: 1,
-              lineStyle: 2, // Dashed
-              axisLabelVisible: true,
-              title: '',
+          if (config.pane === 'separate') {
+            series.priceScale().applyOptions({
+              scaleMargins: { top: 0.8, bottom: 0.02 },
             })
-          })
-        }
+          }
 
-        indicatorSeriesRef.current.set(config.id, series)
+          // Add horizontal reference lines at configured levels
+          if (config.levels) {
+            config.levels.forEach(level => {
+              series!.createPriceLine({
+                price: level,
+                color: 'rgba(255, 255, 255, 0.3)',
+                lineWidth: 1,
+                lineStyle: 2, // Dashed
+                axisLabelVisible: true,
+                title: '',
+              })
+            })
+          }
+
+          indicatorSeriesRef.current.set(config.id, series)
+        } catch (e) {
+          console.warn(`Failed to create indicator series for ${config.id}:`, e)
+          return
+        }
       }
 
       // Determine which value column to use
@@ -338,26 +369,38 @@ export function LiveChart() {
 
   // Handle Bollinger Bands (3 lines)
   function updateBollingerSeries(indicator: IndicatorData) {
+    // Guard against disposed chart
+    if (chartDisposedRef.current || !chartRef.current) return
+
     const { config, points } = indicator
     if (points.length === 0) return
 
+    const chart = chartRef.current
     const bandKeys = ['bb_upper', 'bb_mid', 'bb_lower'] as const
     const bandColors = [config.color, config.color + '80', config.color]
 
     bandKeys.forEach((key, idx) => {
+      // Re-check disposal inside loop
+      if (chartDisposedRef.current) return
+
       const seriesId = `${config.id}-${key}`
       let series = indicatorSeriesRef.current.get(seriesId)
 
       if (!series) {
-        series = chartRef.current!.addSeries(LineSeries, {
-          color: bandColors[idx],
-          lineWidth: 1,
-          lineStyle: idx === 1 ? 2 : 0, // Dashed for middle
-          priceScaleId: 'right',
-          lastValueVisible: false,
-          priceLineVisible: false,
-        })
-        indicatorSeriesRef.current.set(seriesId, series)
+        try {
+          series = chart.addSeries(LineSeries, {
+            color: bandColors[idx],
+            lineWidth: 1,
+            lineStyle: idx === 1 ? 2 : 0, // Dashed for middle
+            priceScaleId: 'right',
+            lastValueVisible: false,
+            priceLineVisible: false,
+          })
+          indicatorSeriesRef.current.set(seriesId, series)
+        } catch (e) {
+          console.warn(`Failed to create Bollinger band series:`, e)
+          return
+        }
       }
 
       const seriesData = points
@@ -384,6 +427,15 @@ export function LiveChart() {
   useEffect(() => {
     if (chartDisposedRef.current || !chartRef.current) return
 
+    const chart = chartRef.current
+    let timeScale: ReturnType<typeof chart.timeScale> | null = null
+
+    try {
+      timeScale = chart.timeScale()
+    } catch {
+      return // Chart may be disposed
+    }
+
     const handleVisibleRangeChange = (range: { from: number; to: number } | null) => {
       if (!range || chartDisposedRef.current) return
       // If user is within 10 bars of the left edge, load more
@@ -392,11 +444,11 @@ export function LiveChart() {
       }
     }
 
-    chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleRangeChange)
+    timeScale.subscribeVisibleLogicalRangeChange(handleVisibleRangeChange)
 
     return () => {
       try {
-        chartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange)
+        timeScale?.unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange)
       } catch { /* ignore - chart may be disposed */ }
     }
   }, [loadMoreHistory, isLoadingMore])
