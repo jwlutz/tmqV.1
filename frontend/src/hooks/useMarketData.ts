@@ -81,6 +81,8 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
   const [status, setStatus] = useState<WSStatus>(isCrypto ? 'connecting' : 'connected')
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMoreHistory, setHasMoreHistory] = useState(true)
+  const candlesRef = useRef(candles)
+  candlesRef.current = candles
   const wsRef = useRef<WSClient | null>(null)
   const lastUpdateRef = useRef<number>(0)
 
@@ -208,42 +210,77 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
 
   // Load more historical candles (for lazy loading on scroll)
   const loadMoreHistory = useCallback(async () => {
-    if (isLoadingMore || !hasMoreHistory || candles.length === 0) return
-    if (candles.length >= MAX_CANDLES) {
-      setHasMoreHistory(false)
-      return
-    }
-
-    // Only Coinbase REST supports cursor-based pagination
-    if (!isCrypto || !COINBASE_INTERVALS.has(interval)) {
+    const currentCandles = candlesRef.current
+    if (isLoadingMore || !hasMoreHistory || currentCandles.length === 0) return
+    if (currentCandles.length >= MAX_CANDLES) {
       setHasMoreHistory(false)
       return
     }
 
     setIsLoadingMore(true)
     try {
-      const earliestCandle = candles[0]
-      const endTime = earliestCandle.time
-      const olderCandles = await fetchHistoricalCandles(coinbaseSymbol, interval, 300, endTime)
+      const earliestCandle = currentCandles[0]
 
-      if (olderCandles.length === 0) {
-        setHasMoreHistory(false)
+      if (isCrypto && COINBASE_INTERVALS.has(interval)) {
+        // Crypto: Coinbase REST cursor-based pagination
+        const endTime = earliestCandle.time
+        const olderCandles = await fetchHistoricalCandles(coinbaseSymbol, interval, 300, endTime)
+
+        if (olderCandles.length === 0) {
+          setHasMoreHistory(false)
+        } else {
+          setCandles(prev => {
+            const filteredOlder = olderCandles.filter(c => c.time < prev[0].time)
+            const combined = [...filteredOlder, ...prev]
+            if (combined.length > MAX_CANDLES) {
+              return combined.slice(combined.length - MAX_CANDLES)
+            }
+            return combined
+          })
+        }
       } else {
-        setCandles(prev => {
-          const filteredOlder = olderCandles.filter(c => c.time < prev[0].time)
-          const combined = [...filteredOlder, ...prev]
-          if (combined.length > MAX_CANDLES) {
-            return combined.slice(combined.length - MAX_CANDLES)
-          }
-          return combined
-        })
+        // Equity / non-Coinbase interval: fetch older date range via backend
+        const earliestDate = new Date(earliestCandle.time * 1000)
+        const end = earliestDate.toISOString().split('T')[0]
+        // Go back further based on interval
+        const daysBack = interval === '1m' || interval === '5m' ? 2
+          : interval === '15m' || interval === '30m' ? 7
+          : interval === '1h' || interval === '4h' ? 30
+          : interval === '1d' ? 365
+          : interval === '1wk' ? 3 * 365
+          : 365
+        const startDate = new Date(earliestDate.getTime() - daysBack * 86400000)
+        const start = startDate.toISOString().split('T')[0]
+        const apiSymbol = isCrypto ? coinbaseSymbol : symbol
+        const res = await fetchOHLCV(apiSymbol, interval, start, end, equitySource)
+
+        if (!res.data || res.data.length === 0) {
+          setHasMoreHistory(false)
+        } else {
+          const olderCandles: Candle[] = res.data.map((d: { date: string; open: number; high: number; low: number; close: number; volume: number }) => ({
+            time: Math.floor(new Date(d.date).getTime() / 1000),
+            open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume,
+          }))
+          setCandles(prev => {
+            if (prev.length === 0) return prev
+            const filteredOlder = olderCandles.filter(c => c.time < prev[0].time)
+            if (filteredOlder.length === 0) return prev
+            const combined = [...filteredOlder, ...prev]
+            if (combined.length > MAX_CANDLES) {
+              return combined.slice(combined.length - MAX_CANDLES)
+            }
+            return combined
+          })
+          // Check if any new candles were actually added (use ref for latest state)
+          // setHasMoreHistory(false) will be triggered on next call if no new data returned
+        }
       }
     } catch (error) {
       console.error('Failed to load more history:', error)
     } finally {
       setIsLoadingMore(false)
     }
-  }, [candles, coinbaseSymbol, interval, isLoadingMore, hasMoreHistory, isCrypto])
+  }, [coinbaseSymbol, symbol, interval, isLoadingMore, hasMoreHistory, isCrypto, equitySource])
 
   return { candles, currentCandle, status, symbol: isCrypto ? coinbaseSymbol : symbol, isCrypto, loadMoreHistory, isLoadingMore, hasMoreHistory }
 }

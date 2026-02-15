@@ -100,6 +100,67 @@ INDICATORS: dict[str, dict] = {
         "call": lambda df, **p: df.ta.cmf(**p),
         "rename": {"CMF": "cmf"},
     },
+    # New indicators
+    "roc": {
+        "description": "Rate of Change",
+        "defaults": {"length": 10},
+        "call": lambda df, **p: df.ta.roc(**p),
+        "rename": {"ROC": "roc"},
+    },
+    "trix": {
+        "description": "Triple Exponential Average",
+        "defaults": {"length": 18},
+        "call": lambda df, **p: df.ta.trix(**p),
+        "rename": {"TRIX": "trix", "TRIXs": "trix_signal"},
+    },
+    "ppo": {
+        "description": "Percentage Price Oscillator",
+        "defaults": {"fast": 12, "slow": 26, "signal": 9},
+        "call": lambda df, **p: df.ta.ppo(**p),
+        "rename": {"PPO_": "ppo", "PPOh": "ppo_histogram", "PPOs": "ppo_signal"},
+    },
+    "aroon": {
+        "description": "Aroon Indicator",
+        "defaults": {"length": 25},
+        "call": lambda df, **p: df.ta.aroon(**p),
+        "rename": {"AROOND": "aroon_down", "AROONU": "aroon_up", "AROONOSC": "aroon_osc"},
+    },
+    "stochrsi": {
+        "description": "Stochastic RSI",
+        "defaults": {"length": 14, "rsi_length": 14, "k": 3, "d": 3},
+        "call": lambda df, **p: df.ta.stochrsi(**p),
+        "rename": {"STOCHRSIk": "stochrsi_k", "STOCHRSId": "stochrsi_d"},
+    },
+    "psar": {
+        "description": "Parabolic SAR",
+        "defaults": {"af0": 0.02, "af": 0.02, "max_af": 0.2},
+        "call": lambda df, **p: df.ta.psar(**p),
+        "rename": {"PSARl": "psar_long", "PSARs": "psar_short", "PSARaf": "psar_af", "PSARr": "psar_reversal"},
+    },
+    "kc": {
+        "description": "Keltner Channels",
+        "defaults": {"length": 20, "scalar": 2},
+        "call": lambda df, **p: df.ta.kc(**p),
+        "rename": {"KCL": "kc_lower", "KCB": "kc_basis", "KCU": "kc_upper"},
+    },
+    "donchian": {
+        "description": "Donchian Channels",
+        "defaults": {"lower_length": 20, "upper_length": 20},
+        "call": lambda df, **p: df.ta.donchian(**p),
+        "rename": {"DCL": "dc_lower", "DCM": "dc_mid", "DCU": "dc_upper"},
+    },
+    "supertrend": {
+        "description": "SuperTrend",
+        "defaults": {"length": 7, "multiplier": 3.0},
+        "call": lambda df, **p: df.ta.supertrend(**p),
+        "rename": {"SUPERT": "supertrend", "SUPERTd": "supertrend_direction", "SUPERTl": "supertrend_long", "SUPERTs": "supertrend_short"},
+    },
+    "ichimoku": {
+        "description": "Ichimoku Cloud",
+        "defaults": {"tenkan": 9, "kijun": 26, "senkou": 52},
+        "call": lambda df, **p: df.ta.ichimoku(**p)[0],  # Returns tuple, first is the indicator df
+        "rename": {"ISA": "ichimoku_span_a", "ISB": "ichimoku_span_b", "ITS": "ichimoku_tenkan", "IKS": "ichimoku_kijun", "ICS": "ichimoku_chikou"},
+    },
 }
 
 

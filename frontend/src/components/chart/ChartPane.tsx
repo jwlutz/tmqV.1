@@ -9,7 +9,7 @@ import { IndicatorsDropdown } from './IndicatorsDropdown'
 import { PaneIntervalSelector } from './PaneIntervalSelector'
 import { TickerDropdown } from './TickerDropdown'
 import { LayoutSelector } from './LayoutSelector'
-import { formatPrice } from '../../hooks/useMarketStats'
+import { formatPrice, formatNumber } from '../../hooks/useMarketStats'
 import type { ChartLayout } from '../../context'
 
 interface ChartPaneProps {
@@ -64,9 +64,14 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
     endDate: dateRange.end,
   })
 
-  // Get latest candle for price display
+  // Get latest candle for stats display
   const latestCandle = candles.length > 0 ? candles[candles.length - 1] : null
-  const currentPrice = latestCandle?.close ?? marketStats?.price
+
+  // Compute change from open using latest candle
+  const changeFromOpen = latestCandle ? latestCandle.close - latestCandle.open : null
+  const changePctFromOpen = latestCandle && latestCandle.open !== 0
+    ? ((latestCandle.close - latestCandle.open) / latestCandle.open) * 100
+    : null
 
   // Reset chart tracking refs when symbol or interval changes
   useEffect(() => {
@@ -415,21 +420,12 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
             <TickerDropdown value={symbol} onChange={onSymbolChange} />
           </div>
 
-          {/* Price */}
-          {currentPrice !== undefined && (
-            <span className="text-xs font-mono text-[var(--text-secondary)]">
-              {formatPrice(currentPrice)}
-            </span>
-          )}
-
           {/* Per-pane interval selector */}
           <PaneIntervalSelector value={interval} onChange={onIntervalChange} />
-        </div>
 
-        <div className="flex items-center gap-1">
           {/* Active indicator chips */}
           {selectedIds.length > 0 && (
-            <div className="flex items-center gap-0.5 mr-1">
+            <div className="flex items-center gap-0.5">
               {selectedIds.slice(0, 3).map(id => {
                 const config = availableIndicators.find(i => i.id === id)
                 if (!config) return null
@@ -457,6 +453,9 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
             onToggle={toggleIndicator}
             disabled={status !== 'connected' && status !== 'error'}
           />
+        </div>
+
+        <div className="flex items-center gap-1">
           {/* Layout selector (only in single-pane mode) */}
           {showLayoutSelector && layoutValue && onLayoutChange && (
             <div onClick={e => e.stopPropagation()}>
@@ -472,18 +471,71 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
         </div>
       </div>
 
+      {/* Stats bar */}
+      {latestCandle && (
+        <div className="flex items-center gap-3 px-2 py-0.5 bg-[var(--bg-dark)] border-b border-[var(--border)] text-[11px] font-mono flex-wrap">
+          {/* Price + Change */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold text-[var(--text-primary)]">
+              {formatPrice(latestCandle.close)}
+            </span>
+            {changeFromOpen !== null && changePctFromOpen !== null && (
+              <span className={changeFromOpen >= 0 ? 'text-[var(--green-up)]' : 'text-[var(--red-down)]'}>
+                {changeFromOpen >= 0 ? '+' : '-'}{formatPrice(Math.abs(changeFromOpen))}
+                {' '}({changePctFromOpen >= 0 ? '+' : ''}{changePctFromOpen.toFixed(2)}%)
+              </span>
+            )}
+          </div>
+
+          <span className="text-[var(--border)]">|</span>
+
+          {/* OHLCV */}
+          <div className="flex items-center gap-1">
+            <span className="text-[var(--text-tertiary)]">O</span>
+            <span className="text-[var(--text-primary)]">{formatPrice(latestCandle.open)}</span>
+            <span className="text-[var(--text-tertiary)]">H</span>
+            <span className="text-[var(--green-up)]">{formatPrice(latestCandle.high)}</span>
+            <span className="text-[var(--text-tertiary)]">L</span>
+            <span className="text-[var(--red-down)]">{formatPrice(latestCandle.low)}</span>
+          </div>
+
+          {latestCandle.volume !== undefined && (
+            <>
+              <span className="text-[var(--border)]">|</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[var(--text-tertiary)]">Vol</span>
+                <span className="text-[var(--text-secondary)]">{formatNumber(latestCandle.volume)}</span>
+              </div>
+            </>
+          )}
+
+          {/* Crypto: market cap + 24h volume from CoinGecko */}
+          {isCrypto && marketStats && (
+            <>
+              <span className="text-[var(--border)]">|</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[var(--text-tertiary)]">MCap</span>
+                <span className="text-[var(--text-secondary)]">{formatNumber(marketStats.marketCap)}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[var(--text-tertiary)]">24h Vol</span>
+                <span className="text-[var(--text-secondary)]">{formatNumber(marketStats.volume24h)}</span>
+              </div>
+            </>
+          )}
+
+          {/* Equity: delayed data badge */}
+          {showDelayedBanner && (
+            <span className="text-amber-400/70 text-[10px]" title="Yahoo Finance provides delayed/EOD data. Connect a broker for live data.">
+              Delayed
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Chart container */}
       <div className="relative flex-1">
         <div ref={containerRef} className="w-full h-full" />
-
-        {/* Delayed data banner for equities */}
-        {showDelayedBanner && candles.length > 0 && (
-          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-center gap-1 py-0.5 bg-[rgba(0,0,0,0.6)] text-[11px] text-amber-400/80">
-            <span>Delayed data (Yahoo Finance)</span>
-            <span className="text-[var(--text-tertiary)]">&middot;</span>
-            <span className="text-[var(--text-tertiary)] cursor-default">Connect a broker for live data</span>
-          </div>
-        )}
 
         {(status === 'connecting' || (candles.length < 5 && status !== 'error')) && (
           <LoadingOverlay message={status === 'connecting' ? 'Connecting...' : 'Loading...'} />

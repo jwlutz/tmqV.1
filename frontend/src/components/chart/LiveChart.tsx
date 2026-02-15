@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp } from 'lightweight-charts'
 import { useMarketData } from '../../hooks'
 import { useIndicators, IndicatorData } from '../../hooks/useIndicators'
@@ -6,6 +6,7 @@ import { useMarketStats } from '../../hooks/useMarketStats'
 import { useSymbol, useInterval } from '../../context'
 import { LoadingOverlay } from '../ui'
 import { ChartHeader, OHLCVData } from './ChartHeader'
+import { fetchOHLCV } from '../../api/client'
 
 export function LiveChart() {
   const { symbol: contextSymbol, setSymbol } = useSymbol()
@@ -17,11 +18,17 @@ export function LiveChart() {
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
+  const compareSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const lastCandleCountRef = useRef(0)
   const earliestTimeRef = useRef<number | null>(null)
   const lastTimeRef = useRef<number | null>(null) // Track last timestamp to detect resets
   const isResettingRef = useRef(false)
   const chartDisposedRef = useRef(false) // Track if chart has been disposed
+
+  // Comparison symbol state
+  const [compareSymbol, setCompareSymbol] = useState<string | null>(null)
+  const [compareData, setCompareData] = useState<Array<{ time: UTCTimestamp; value: number }>>([])
+  const [, setCompareLoading] = useState(false)
 
   // Compute date range from candles for indicator fetching
   const dateRange = useMemo(() => {
@@ -252,8 +259,18 @@ export function LiveChart() {
 
     // Remove series for deselected indicators - collect IDs first to avoid modifying while iterating
     const idsToRemove: string[] = []
+    // Multi-line indicator suffixes to strip when checking base ID
+    const multiLineSuffixes = ['-bb_', '-kc_', '-dc_', '-ichimoku_']
     indicatorSeriesRef.current.forEach((_series, id) => {
-      const baseId = id.split('-bb_')[0] // Handle bbands sub-series
+      // Extract base ID by removing multi-line suffixes
+      let baseId = id
+      for (const suffix of multiLineSuffixes) {
+        const idx = id.indexOf(suffix)
+        if (idx !== -1) {
+          baseId = id.slice(0, idx)
+          break
+        }
+      }
       if (!selectedIds.includes(baseId) && !selectedIds.includes(id)) {
         idsToRemove.push(id)
       }
@@ -278,9 +295,9 @@ export function LiveChart() {
       const { config, points } = indicator
       if (points.length === 0) return
 
-      // Handle Bollinger Bands (multiple lines)
-      if (config.name === 'bbands') {
-        updateBollingerSeries(indicator)
+      // Handle multi-line indicators (bands/channels)
+      if (isMultiLineIndicator(config.name)) {
+        updateMultiLineSeries(indicator)
         return
       }
 
@@ -358,7 +375,8 @@ export function LiveChart() {
       case 'sma': return 'sma'
       case 'rsi': return 'rsi'
       case 'macd': return 'macd'
-      case 'stoch': return 'stoch_k' // Primary stochastic line
+      case 'stoch': return 'stoch_k'
+      case 'stochrsi': return 'stochrsi_k'
       case 'atr': return 'atr'
       case 'adx': return 'adx'
       case 'vwap': return 'vwap'
@@ -367,42 +385,78 @@ export function LiveChart() {
       case 'cci': return 'cci'
       case 'willr': return 'willr'
       case 'cmf': return 'cmf'
+      case 'roc': return 'roc'
+      case 'trix': return 'trix'
+      case 'ppo': return 'ppo'
+      case 'aroon': return 'aroon_up'
+      case 'supertrend': return 'supertrend'
+      case 'psar': return 'psar_long' // Use long position values
       default: return 'value'
     }
   }
 
-  // Handle Bollinger Bands (3 lines)
-  function updateBollingerSeries(indicator: IndicatorData) {
-    // Guard against disposed chart
+  // Check if indicator needs multi-line handling
+  function isMultiLineIndicator(name: string): boolean {
+    return ['bbands', 'kc', 'donchian', 'ichimoku'].includes(name)
+  }
+
+  // Multi-line indicator configs: keys and line styles
+  const MULTI_LINE_CONFIG: Record<string, { keys: string[]; styles: Array<{ dashed?: boolean; alpha?: string }> }> = {
+    bbands: {
+      keys: ['bb_upper', 'bb_mid', 'bb_lower'],
+      styles: [{}, { dashed: true, alpha: '80' }, {}],
+    },
+    kc: {
+      keys: ['kc_upper', 'kc_basis', 'kc_lower'],
+      styles: [{}, { dashed: true, alpha: '80' }, {}],
+    },
+    donchian: {
+      keys: ['dc_upper', 'dc_mid', 'dc_lower'],
+      styles: [{}, { dashed: true, alpha: '80' }, {}],
+    },
+    ichimoku: {
+      keys: ['ichimoku_tenkan', 'ichimoku_kijun', 'ichimoku_span_a', 'ichimoku_span_b'],
+      styles: [
+        { alpha: 'ff' },  // Tenkan (conversion) - solid
+        { alpha: 'cc' },  // Kijun (base) - slightly transparent
+        { alpha: '99' },  // Span A - more transparent
+        { alpha: '66' },  // Span B - most transparent
+      ],
+    },
+  }
+
+  // Handle multi-line indicators (bands, channels, ichimoku)
+  function updateMultiLineSeries(indicator: IndicatorData) {
     if (chartDisposedRef.current || !chartRef.current) return
 
     const { config, points } = indicator
     if (points.length === 0) return
 
     const chart = chartRef.current
-    const bandKeys = ['bb_upper', 'bb_mid', 'bb_lower'] as const
-    const bandColors = [config.color, config.color + '80', config.color]
+    const lineConfig = MULTI_LINE_CONFIG[config.name]
+    if (!lineConfig) return
 
-    bandKeys.forEach((key, idx) => {
-      // Re-check disposal inside loop
+    lineConfig.keys.forEach((key, idx) => {
       if (chartDisposedRef.current) return
 
       const seriesId = `${config.id}-${key}`
       let series = indicatorSeriesRef.current.get(seriesId)
+      const style = lineConfig.styles[idx] || {}
+      const color = style.alpha ? config.color + style.alpha : config.color
 
       if (!series) {
         try {
           series = chart.addSeries(LineSeries, {
-            color: bandColors[idx],
+            color,
             lineWidth: 1,
-            lineStyle: idx === 1 ? 2 : 0, // Dashed for middle
+            lineStyle: style.dashed ? 2 : 0,
             priceScaleId: 'right',
             lastValueVisible: false,
             priceLineVisible: false,
           })
           indicatorSeriesRef.current.set(seriesId, series)
         } catch (e) {
-          console.warn(`Failed to create Bollinger band series:`, e)
+          console.warn(`Failed to create ${config.name} series:`, e)
           return
         }
       }
@@ -413,7 +467,6 @@ export function LiveChart() {
           time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
           value: Number(p[key]),
         }))
-        // Sort by time and deduplicate
         .sort((a, b) => a.time - b.time)
         .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
 
@@ -421,11 +474,106 @@ export function LiveChart() {
         try {
           series.setData(seriesData)
         } catch (e) {
-          console.warn(`Failed to set Bollinger band data:`, e)
+          console.warn(`Failed to set ${config.name} data:`, e)
         }
       }
     })
   }
+
+  // Fetch comparison symbol data
+  useEffect(() => {
+    if (!compareSymbol || !dateRange.start || !dateRange.end) {
+      setCompareData([])
+      return
+    }
+
+    let cancelled = false
+    setCompareLoading(true)
+
+    async function fetchCompare() {
+      try {
+        // Convert symbol format if needed (BTC-USD -> BTC/USD for backend)
+        const apiSymbol = compareSymbol!.replace('-', '/')
+        const res = await fetchOHLCV(apiSymbol, interval, dateRange.start!, dateRange.end!)
+        if (cancelled) return
+
+        if (res.data?.length > 0) {
+          // Convert to line series data
+          const lineData = res.data.map((d: { date: string; close: number }) => ({
+            time: Math.floor(new Date(d.date).getTime() / 1000) as UTCTimestamp,
+            value: d.close,
+          }))
+          setCompareData(lineData)
+        }
+      } catch (err) {
+        console.warn('Failed to fetch comparison data:', err)
+        setCompareData([])
+      } finally {
+        if (!cancelled) setCompareLoading(false)
+      }
+    }
+
+    fetchCompare()
+    return () => { cancelled = true }
+  }, [compareSymbol, interval, dateRange.start, dateRange.end])
+
+  // Render comparison series on chart
+  useEffect(() => {
+    if (chartDisposedRef.current || !chartRef.current) return
+    const chart = chartRef.current
+
+    // Remove existing comparison series if no compare symbol
+    if (!compareSymbol && compareSeriesRef.current) {
+      try {
+        chart.removeSeries(compareSeriesRef.current)
+      } catch { /* ignore */ }
+      compareSeriesRef.current = null
+      return
+    }
+
+    if (!compareSymbol || compareData.length === 0) return
+
+    // Create comparison series if needed
+    if (!compareSeriesRef.current) {
+      try {
+        compareSeriesRef.current = chart.addSeries(LineSeries, {
+          color: '#fbbf24', // Amber/gold color
+          lineWidth: 2,
+          priceScaleId: 'left', // Separate Y-axis on left
+          lastValueVisible: true,
+          priceLineVisible: false,
+          title: compareSymbol,
+        })
+        // Configure left price scale
+        chart.priceScale('left').applyOptions({
+          visible: true,
+          borderColor: 'rgba(255, 191, 36, 0.3)',
+        })
+      } catch (e) {
+        console.warn('Failed to create comparison series:', e)
+        return
+      }
+    }
+
+    // Update data
+    try {
+      compareSeriesRef.current.setData(compareData)
+    } catch (e) {
+      console.warn('Failed to set comparison data:', e)
+    }
+  }, [compareSymbol, compareData])
+
+  // Clear comparison series when symbol changes
+  useEffect(() => {
+    if (compareSeriesRef.current && chartRef.current && !chartDisposedRef.current) {
+      try {
+        chartRef.current.removeSeries(compareSeriesRef.current)
+      } catch { /* ignore */ }
+      compareSeriesRef.current = null
+    }
+    setCompareSymbol(null)
+    setCompareData([])
+  }, [contextSymbol])
 
   // Lazy load more history when user scrolls/zooms near left edge
   useEffect(() => {
@@ -472,6 +620,8 @@ export function LiveChart() {
         marketStats={marketStats}
         marketStatsLoading={marketStatsLoading}
         disabled={status !== 'connected'}
+        compareSymbol={compareSymbol}
+        onCompareSymbolChange={setCompareSymbol}
       />
 
       {/* Chart Container */}

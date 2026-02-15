@@ -1,9 +1,131 @@
+import { useState, useRef, useEffect } from 'react'
 import { IndicatorConfig } from '../../hooks/useIndicators'
 import { MarketStats } from '../../api/client'
 import { formatNumber, formatPrice } from '../../hooks/useMarketStats'
 import { IntervalDropdown } from './IntervalDropdown'
 import { IndicatorsDropdown } from './IndicatorsDropdown'
 import { TickerDropdown } from './TickerDropdown'
+
+// Common comparison symbols
+const COMPARE_SYMBOLS = [
+  // Crypto
+  { value: 'BTC-USD', label: 'BTC' },
+  { value: 'ETH-USD', label: 'ETH' },
+  { value: 'SOL-USD', label: 'SOL' },
+  // Equities
+  { value: 'SPY', label: 'SPY' },
+  { value: 'QQQ', label: 'QQQ' },
+  { value: 'GLD', label: 'GLD' },
+  { value: 'TLT', label: 'TLT' },
+  { value: 'DXY', label: 'DXY' },
+]
+
+interface CompareDropdownProps {
+  value: string | null | undefined
+  onChange: (symbol: string | null) => void
+  disabled?: boolean
+  currentSymbol: string
+}
+
+function CompareDropdown({ value, onChange, disabled, currentSymbol }: CompareDropdownProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [customSymbol, setCustomSymbol] = useState('')
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Filter out current symbol from options
+  const availableSymbols = COMPARE_SYMBOLS.filter(s => s.value !== currentSymbol)
+
+  const handleCustomSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (customSymbol.trim()) {
+      onChange(customSymbol.trim().toUpperCase())
+      setCustomSymbol('')
+      setIsOpen(false)
+    }
+  }
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
+          value
+            ? 'bg-[var(--accent-blue)]/20 border-[var(--accent-blue)] text-[var(--accent-blue)]'
+            : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-hover)]'
+        } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        {value ? value : 'Compare'}
+        {value && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onChange(null) }}
+            className="ml-1 hover:text-[var(--red-down)]"
+          >
+            ×
+          </button>
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-48 bg-[var(--bg-card)] border border-[var(--border)] rounded shadow-lg z-50">
+          {/* Quick picks */}
+          <div className="p-1 border-b border-[var(--border)]">
+            <div className="text-[10px] text-[var(--text-tertiary)] px-2 py-1">Quick picks</div>
+            <div className="grid grid-cols-4 gap-1">
+              {availableSymbols.map(s => (
+                <button
+                  key={s.value}
+                  onClick={() => { onChange(s.value); setIsOpen(false) }}
+                  className={`px-2 py-1 text-xs rounded transition-colors ${
+                    value === s.value
+                      ? 'bg-[var(--accent-blue)] text-white'
+                      : 'bg-[var(--bg-darker)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom symbol input */}
+          <form onSubmit={handleCustomSubmit} className="p-2">
+            <div className="text-[10px] text-[var(--text-tertiary)] mb-1">Custom symbol</div>
+            <div className="flex gap-1">
+              <input
+                type="text"
+                value={customSymbol}
+                onChange={(e) => setCustomSymbol(e.target.value)}
+                placeholder="AAPL, GLD..."
+                className="flex-1 px-2 py-1 text-xs bg-[var(--bg-darker)] border border-[var(--border)] rounded text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-[var(--accent-blue)]"
+              />
+              <button
+                type="submit"
+                className="px-2 py-1 text-xs bg-[var(--accent-blue)] text-white rounded hover:bg-[var(--accent-blue)]/80"
+              >
+                Add
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export interface OHLCVData {
   open: number
@@ -28,6 +150,8 @@ interface ChartHeaderProps {
   disabled?: boolean
   hideSymbol?: boolean
   hideIndicators?: boolean
+  compareSymbol?: string | null
+  onCompareSymbolChange?: (symbol: string | null) => void
 }
 
 export function ChartHeader({
@@ -44,6 +168,8 @@ export function ChartHeader({
   disabled,
   hideSymbol,
   hideIndicators,
+  compareSymbol,
+  onCompareSymbolChange,
 }: ChartHeaderProps) {
   // Use live OHLCV close for real-time price (from WebSocket), fallback to market stats
   const currentPrice = ohlcv?.close ?? marketStats?.price
@@ -74,6 +200,16 @@ export function ChartHeader({
             selectedIds={selectedIndicatorIds}
             onToggle={onIndicatorToggle}
             disabled={disabled}
+          />
+        )}
+
+        {/* Compare Symbol */}
+        {onCompareSymbolChange && (
+          <CompareDropdown
+            value={compareSymbol}
+            onChange={onCompareSymbolChange}
+            disabled={disabled}
+            currentSymbol={symbol}
           />
         )}
 
