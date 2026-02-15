@@ -1,0 +1,9 @@
+yfinance
+ccxt
+pandas
+numpy
+pydantic
+pandas-ta-classic
+
+[dev]
+pytest
