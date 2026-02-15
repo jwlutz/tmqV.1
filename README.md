@@ -1,4 +1,4 @@
-# thats_my_quant
+# thats_my_quant V0.1
 
 A crypto and equities charting platform with AI-assisted backtesting.
 
