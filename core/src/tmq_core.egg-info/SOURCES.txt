@@ -16,5 +16,6 @@ tests/test_alpaca.py
 tests/test_backtest.py
 tests/test_data.py
 tests/test_indicators.py
+tests/test_macro.py
 tests/test_sandbox.py
 tests/test_server.py

@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import './App.css'
-import { AppProvider, useMode } from './context'
+import { AppProvider, useMode, useSettingsOverlay } from './context'
 import { TopBar, MainPanel, ChatSidebar } from './components/layout'
+import { SettingsOverlay } from './components/settings'
 import { ErrorBoundary } from './components/ui'
 
 function useKeyboardShortcuts() {
@@ -26,6 +27,7 @@ function useKeyboardShortcuts() {
 
 function AppContent() {
   useKeyboardShortcuts()
+  const { settingsOpen, setSettingsOpen } = useSettingsOverlay()
 
   return (
     <div className="h-screen flex flex-col">
@@ -38,6 +40,7 @@ function AppContent() {
           <ChatSidebar />
         </ErrorBoundary>
       </div>
+      {settingsOpen && <SettingsOverlay onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }

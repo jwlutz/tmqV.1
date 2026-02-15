@@ -134,6 +134,9 @@ interface AppContextValue {
   setFredConfigured: (configured: boolean) => void;
   addMacroOverlay: (paneId: string, overlay: MacroOverlay) => void;
   removeMacroOverlay: (paneId: string, overlayId: string) => void;
+  // Settings overlay
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -188,6 +191,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // FRED macro data
   const [fredApiKey, setFredApiKey] = useState('');
   const [fredConfigured, setFredConfigured] = useState(false);
+  // Settings overlay
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const setProviderCredential = useCallback(<K extends keyof ProviderCredentials>(
     provider: K,
@@ -330,6 +335,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       fredApiKey, setFredApiKey,
       fredConfigured, setFredConfigured,
       addMacroOverlay, removeMacroOverlay,
+      // Settings overlay
+      settingsOpen, setSettingsOpen,
     }}>
       {children}
     </AppContext.Provider>
@@ -407,4 +414,9 @@ export function useMacroOverlays() {
     addMacroOverlay: (overlay: MacroOverlay) => addMacroOverlay(activePaneId, overlay),
     removeMacroOverlay: (overlayId: string) => removeMacroOverlay(activePaneId, overlayId),
   };
+}
+
+export function useSettingsOverlay() {
+  const { settingsOpen, setSettingsOpen } = useAppContext();
+  return { settingsOpen, setSettingsOpen };
 }

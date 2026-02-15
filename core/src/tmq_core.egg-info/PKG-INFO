@@ -5,10 +5,10 @@ Requires-Python: >=3.10
 Requires-Dist: yfinance
 Requires-Dist: ccxt
 Requires-Dist: alpaca-py
-Requires-Dist: pandas
-Requires-Dist: numpy
+Requires-Dist: pandas<2.1
+Requires-Dist: numpy<1.24,>=1.18
 Requires-Dist: pydantic
-Requires-Dist: pandas-ta-classic
+Requires-Dist: pandas-ta-classic==0.3.54
 Requires-Dist: vectorbt==0.28.1
 Requires-Dist: fastapi
 Requires-Dist: uvicorn[standard]

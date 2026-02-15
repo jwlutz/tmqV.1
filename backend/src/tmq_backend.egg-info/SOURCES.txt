@@ -24,4 +24,6 @@ src/tmq_backend/routes/backtest.py
 src/tmq_backend/routes/chat.py
 src/tmq_backend/routes/data.py
 src/tmq_backend/routes/indicators.py
+src/tmq_backend/routes/macro.py
+tests/test_macro_routes.py
 tests/test_routes.py
