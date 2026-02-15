@@ -51,19 +51,29 @@ export interface APIBacktestResult {
   provider: string;
 }
 
+// Macro overlay for chart panes
+export interface MacroOverlay {
+  id: string;           // unique id
+  seriesId: string;     // FRED series ID like "DGS10"
+  name: string;         // display name
+  data: Array<{ date: string; value: number }>;
+  color: string;
+}
+
 // Chart pane state
 export interface ChartPaneState {
   id: string;
   symbol: string;
   interval: string;
   indicators: string[]; // selected indicator IDs
+  macroOverlays: MacroOverlay[];
 }
 
 const DEFAULT_SYMBOL = 'BTC-USD';
 const DEFAULT_INTERVAL = '1d';
 
 function createPane(id: string, symbol: string = DEFAULT_SYMBOL, interval: string = DEFAULT_INTERVAL): ChartPaneState {
-  return { id, symbol, interval, indicators: [] };
+  return { id, symbol, interval, indicators: [], macroOverlays: [] };
 }
 
 interface AppContextValue {
@@ -117,6 +127,13 @@ interface AppContextValue {
   setCodePanelOpen: (open: boolean) => void;
   sandboxCode: string;
   setSandboxCode: (code: string) => void;
+  // FRED macro data
+  fredApiKey: string;
+  setFredApiKey: (key: string) => void;
+  fredConfigured: boolean;
+  setFredConfigured: (configured: boolean) => void;
+  addMacroOverlay: (paneId: string, overlay: MacroOverlay) => void;
+  removeMacroOverlay: (paneId: string, overlayId: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -168,6 +185,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Code panel
   const [codePanelOpen, setCodePanelOpen] = useState(true);
   const [sandboxCode, setSandboxCode] = useState('');
+  // FRED macro data
+  const [fredApiKey, setFredApiKey] = useState('');
+  const [fredConfigured, setFredConfigured] = useState(false);
 
   const setProviderCredential = useCallback(<K extends keyof ProviderCredentials>(
     provider: K,
@@ -224,6 +244,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSymbolState(pane.symbol);
       setIntervalState(pane.interval);
     }
+  }, []);
+
+  const addMacroOverlay = useCallback((paneId: string, overlay: MacroOverlay) => {
+    setPanes(prev => prev.map(p =>
+      p.id === paneId
+        ? { ...p, macroOverlays: [...p.macroOverlays.filter(m => m.seriesId !== overlay.seriesId), overlay] }
+        : p
+    ));
+  }, []);
+
+  const removeMacroOverlay = useCallback((paneId: string, overlayId: string) => {
+    setPanes(prev => prev.map(p =>
+      p.id === paneId
+        ? { ...p, macroOverlays: p.macroOverlays.filter(m => m.id !== overlayId) }
+        : p
+    ));
   }, []);
 
   const setLayout = useCallback((newLayout: ChartLayout) => {
@@ -290,6 +326,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Code panel
       codePanelOpen, setCodePanelOpen,
       sandboxCode, setSandboxCode,
+      // FRED macro data
+      fredApiKey, setFredApiKey,
+      fredConfigured, setFredConfigured,
+      addMacroOverlay, removeMacroOverlay,
     }}>
       {children}
     </AppContext.Provider>
@@ -352,4 +392,19 @@ export function useChartLayout() {
 export function useCodePanel() {
   const { codePanelOpen, setCodePanelOpen, sandboxCode, setSandboxCode } = useAppContext();
   return { codePanelOpen, setCodePanelOpen, sandboxCode, setSandboxCode };
+}
+
+export function useFredSettings() {
+  const { fredApiKey, setFredApiKey, fredConfigured, setFredConfigured } = useAppContext();
+  return { fredApiKey, setFredApiKey, fredConfigured, setFredConfigured };
+}
+
+export function useMacroOverlays() {
+  const { panes, activePaneId, addMacroOverlay, removeMacroOverlay } = useAppContext();
+  const activePane = panes.find(p => p.id === activePaneId);
+  return {
+    macroOverlays: activePane?.macroOverlays || [],
+    addMacroOverlay: (overlay: MacroOverlay) => addMacroOverlay(activePaneId, overlay),
+    removeMacroOverlay: (overlayId: string) => removeMacroOverlay(activePaneId, overlayId),
+  };
 }

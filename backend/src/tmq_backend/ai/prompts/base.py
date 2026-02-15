@@ -18,6 +18,9 @@ TOOL_GUIDANCE = {
     "tmq_backtest_custom": "Run custom Python strategies. Use when users want a custom strategy.",
     "tmq_strategies": "List available strategies and their parameters.",
     "tmq_analyze": "Run custom analysis code on price data.",
+    "tmq_macro": "Fetch macroeconomic data from FRED. Use for rates, inflation, employment, GDP, VIX, FX, money supply, credit spreads, commodities. Popular: FEDFUNDS, DGS10, T10Y2Y, CPIAUCSL, VIXCLS, UNRATE, GDP, M2SL, DCOILWTICO, DEXUSEU.",
+    "tmq_macro_search": "Search FRED for economic data series by keyword when you don't know the exact series ID.",
+    "tmq_macro_backtest": "Run a strategy conditioned on macro data. Use generate_signals(df, macro) where macro has FRED series columns aligned to trading dates. For regime-conditional strategies.",
 }
 
 # Behavioral constraints
@@ -30,6 +33,8 @@ CONSTRAINTS = [
     "If a symbol isn't found, suggest alternatives (BTC-USD for Yahoo Finance, BTC/USDT for exchange).",
     "Use ISO 8601 dates (YYYY-MM-DD) for all date parameters in tool calls.",
     "When user says 'recent' or 'last month', resolve to concrete dates using the current datetime.",
+    "When analyzing markets, proactively pull relevant macro context: for equities check VIX, yield curve (T10Y2Y), fed funds rate; for crypto check DXY (DTWEXBGS), M2 money supply, real yields; for rate-sensitive sectors check DGS10, MORTGAGE30US, credit spreads (BAMLH0A0HYM2).",
+    "For macro-conditioned backtests, use tmq_macro_backtest with generate_signals(df, macro). Always cite the specific FRED series ID when referencing macro data.",
 ]
 
 # Agentic behaviors (persistence, tool-first, plan-then-act)

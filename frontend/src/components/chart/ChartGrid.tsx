@@ -1,9 +1,11 @@
-import { useChartLayout } from '../../context'
+import { useChartLayout, useAppContext } from '../../context'
+import type { MacroOverlay } from '../../context'
 import { ChartPane } from './ChartPane'
 import { LayoutSelector } from './LayoutSelector'
 
 export function ChartGrid() {
   const { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol, setPaneInterval } = useChartLayout()
+  const { addMacroOverlay, removeMacroOverlay } = useAppContext()
 
   const gridClass =
     layout === '1x1' ? 'grid-cols-1 grid-rows-1' :
@@ -34,6 +36,9 @@ export function ChartGrid() {
             showLayoutSelector={layout === '1x1'}
             layoutValue={layout}
             onLayoutChange={setLayout}
+            macroOverlays={pane.macroOverlays}
+            onAddMacroOverlay={(overlay: MacroOverlay) => addMacroOverlay(pane.id, overlay)}
+            onRemoveMacroOverlay={(overlayId: string) => removeMacroOverlay(pane.id, overlayId)}
           />
         ))}
       </div>

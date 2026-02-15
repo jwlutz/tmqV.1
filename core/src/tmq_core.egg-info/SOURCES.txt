@@ -3,6 +3,7 @@ src/tmq_core/__init__.py
 src/tmq_core/backtest.py
 src/tmq_core/data.py
 src/tmq_core/indicators.py
+src/tmq_core/macro.py
 src/tmq_core/sandbox.py
 src/tmq_core/schemas.py
 src/tmq_core/server.py

@@ -10,13 +10,14 @@ dependencies = [
     "yfinance",
     "ccxt",
     "alpaca-py",
-    "pandas",
-    "numpy",
+    "pandas<2.1",
+    "numpy>=1.18,<1.24",
     "pydantic",
-    "pandas-ta-classic",
+    "pandas-ta-classic==0.3.54",
     "vectorbt==0.28.1",
     "fastapi",
     "uvicorn[standard]",
+    "fredapi",
 ]
 
 [project.optional-dependencies]

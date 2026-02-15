@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import threading
 from typing import Any
 
@@ -106,11 +107,17 @@ def execute_custom_strategy(
     code: str,
     df: pd.DataFrame,
     init_cash: float = 10000,
+    macro_data: pd.DataFrame | None = None,
 ) -> BacktestResult:
     """
     Execute AI-generated signal code against OHLCV data.
 
-    The code must define generate_signals(df) returning (entries, exits) boolean Series.
+    The code must define generate_signals(df) or generate_signals(df, macro)
+    returning (entries, exits) boolean Series.
+
+    If macro_data is provided and the function accepts 2 parameters,
+    the macro DataFrame is passed as the second argument.
+
     Only pandas, numpy, pandas_ta_classic are available. 30 second timeout.
     """
     namespace = _build_namespace()
@@ -123,8 +130,17 @@ def execute_custom_strategy(
 
     generate_signals = namespace["generate_signals"]
 
+    # Check if function accepts macro data
+    sig = inspect.signature(generate_signals)
+    param_count = len(sig.parameters)
+
+    if macro_data is not None and param_count >= 2:
+        args = (df.copy(), macro_data.copy())
+    else:
+        args = (df.copy(),)
+
     # Run with timeout
-    entries, exits = _run_with_timeout(generate_signals, args=(df.copy(),), timeout=30.0)
+    entries, exits = _run_with_timeout(generate_signals, args=args, timeout=30.0)
 
     # Validate output
     if not isinstance(entries, pd.Series) or not isinstance(exits, pd.Series):

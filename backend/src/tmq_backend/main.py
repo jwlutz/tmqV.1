@@ -6,6 +6,7 @@ from tmq_backend.routes.data import router as data_router
 from tmq_backend.routes.indicators import router as indicators_router
 from tmq_backend.routes.backtest import router as backtest_router
 from tmq_backend.routes.chat import router as chat_router
+from tmq_backend.routes.macro import router as macro_router
 
 app = FastAPI(title="TMQ Backend")
 
@@ -20,6 +21,7 @@ app.include_router(data_router)
 app.include_router(indicators_router)
 app.include_router(backtest_router)
 app.include_router(chat_router)
+app.include_router(macro_router)
 
 
 @app.get("/api/health")

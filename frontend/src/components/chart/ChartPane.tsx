@@ -6,13 +6,14 @@ import { useMarketStats } from '../../hooks/useMarketStats'
 import { useDataSettings } from '../../context'
 import { LoadingOverlay } from '../ui'
 import { IndicatorsDropdown } from './IndicatorsDropdown'
+import { MacroDropdown } from './MacroDropdown'
 import { PaneIntervalSelector } from './PaneIntervalSelector'
 import { TickerDropdown } from './TickerDropdown'
 import { LayoutSelector } from './LayoutSelector'
 import { CompareDropdown } from './CompareDropdown'
 import { formatPrice, formatNumber } from '../../hooks/useMarketStats'
 import { fetchOHLCV } from '../../api/client'
-import type { ChartLayout } from '../../context'
+import type { ChartLayout, MacroOverlay } from '../../context'
 
 interface ChartPaneProps {
   paneId: string;
@@ -25,9 +26,12 @@ interface ChartPaneProps {
   showLayoutSelector?: boolean;
   layoutValue?: ChartLayout;
   onLayoutChange?: (layout: ChartLayout) => void;
+  macroOverlays?: MacroOverlay[];
+  onAddMacroOverlay?: (overlay: MacroOverlay) => void;
+  onRemoveMacroOverlay?: (overlayId: string) => void;
 }
 
-export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChange, onIntervalChange, showLayoutSelector, layoutValue, onLayoutChange }: ChartPaneProps) {
+export function ChartPane({ paneId, symbol, interval, isActive, onActivate, onSymbolChange, onIntervalChange, showLayoutSelector, layoutValue, onLayoutChange, macroOverlays = [], onAddMacroOverlay, onRemoveMacroOverlay }: ChartPaneProps) {
   const { candles, status, isCrypto, loadMoreHistory, isLoadingMore } = useMarketData(symbol, interval)
   const { stats: marketStats } = useMarketStats(symbol)
   const { providerCredentials } = useDataSettings()
@@ -37,6 +41,7 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const compareSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
+  const macroSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const lastCandleCountRef = useRef(0)
   const earliestTimeRef = useRef<number | null>(null)
   const lastTimeRef = useRef<number | null>(null)
@@ -607,6 +612,80 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
     setMainPctData([])
   }, [symbol])
 
+  // Render macro overlay series on separate 'macro' price scale
+  useEffect(() => {
+    if (chartDisposedRef.current || !chartRef.current) return
+    const chart = chartRef.current
+
+    // Remove series that are no longer in macroOverlays
+    const activeOverlayIds = new Set(macroOverlays.map(o => o.id))
+    const toRemove: string[] = []
+    macroSeriesRef.current.forEach((_series, id) => {
+      if (!activeOverlayIds.has(id)) {
+        toRemove.push(id)
+      }
+    })
+    for (const id of toRemove) {
+      const series = macroSeriesRef.current.get(id)
+      if (series && chart && !chartDisposedRef.current) {
+        try { chart.removeSeries(series) } catch { /* ignore */ }
+      }
+      macroSeriesRef.current.delete(id)
+    }
+
+    // Add/update active overlays
+    macroOverlays.forEach((overlay) => {
+      if (chartDisposedRef.current || !chart || overlay.data.length === 0) return
+
+      let series = macroSeriesRef.current.get(overlay.id)
+      if (!series) {
+        try {
+          series = chart.addSeries(LineSeries, {
+            color: overlay.color,
+            lineWidth: 2,
+            priceScaleId: 'macro',
+            lastValueVisible: true,
+            priceLineVisible: false,
+            title: overlay.seriesId,
+            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+          })
+          chart.priceScale('macro').applyOptions({
+            scaleMargins: { top: 0.1, bottom: 0.2 },
+          })
+          macroSeriesRef.current.set(overlay.id, series)
+        } catch (e) {
+          console.warn(`Failed to create macro series for ${overlay.seriesId}:`, e)
+          return
+        }
+      }
+
+      const seriesData = overlay.data
+        .filter(p => p.value !== null && p.value !== undefined)
+        .map(p => ({
+          time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
+          value: Number(p.value),
+        }))
+        .sort((a, b) => a.time - b.time)
+        .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
+
+      if (seriesData.length > 0) {
+        try { series.setData(seriesData) } catch (e) {
+          console.warn(`Failed to set macro data for ${overlay.seriesId}:`, e)
+        }
+      }
+    })
+  }, [macroOverlays])
+
+  // Clean up macro series when symbol changes
+  useEffect(() => {
+    if (!chartRef.current || chartDisposedRef.current) return
+    const chart = chartRef.current
+    macroSeriesRef.current.forEach((series) => {
+      try { chart.removeSeries(series) } catch { /* ignore */ }
+    })
+    macroSeriesRef.current.clear()
+  }, [symbol])
+
   return (
     <div
       className={`flex flex-col w-full h-full rounded-lg overflow-hidden border transition-colors ${
@@ -665,6 +744,39 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
               currentSymbol={symbol}
             />
           </div>
+          {onAddMacroOverlay && onRemoveMacroOverlay && (
+            <div onClick={e => e.stopPropagation()}>
+              <MacroDropdown
+                paneId={paneId}
+                activeOverlays={macroOverlays}
+                onAddOverlay={onAddMacroOverlay}
+                onRemoveOverlay={onRemoveMacroOverlay}
+                disabled={status !== 'connected' && status !== 'error'}
+                startDate={dateRange.start}
+                endDate={dateRange.end}
+              />
+            </div>
+          )}
+          {/* Active macro chips */}
+          {macroOverlays.length > 0 && (
+            <div className="flex items-center gap-0.5">
+              {macroOverlays.slice(0, 2).map(overlay => (
+                <button
+                  key={overlay.id}
+                  onClick={(e) => { e.stopPropagation(); onRemoveMacroOverlay?.(overlay.id) }}
+                  className="flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-mono bg-white/5 hover:bg-white/10 transition-colors"
+                  style={{ color: overlay.color }}
+                  title={`Remove ${overlay.name}`}
+                >
+                  {overlay.seriesId}
+                  <span className="text-[var(--text-tertiary)]">&times;</span>
+                </button>
+              ))}
+              {macroOverlays.length > 2 && (
+                <span className="text-[10px] text-[var(--text-tertiary)]">+{macroOverlays.length - 2}</span>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-1">

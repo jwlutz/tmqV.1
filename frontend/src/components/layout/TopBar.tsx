@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { useMode, useChatSettings, useDataSettings, AlpacaCredentials, PolygonCredentials } from '../../context'
-import { configureDataProvider } from '../../api/client'
+import { useMode, useChatSettings, useDataSettings, useFredSettings, AlpacaCredentials, PolygonCredentials } from '../../context'
+import { configureDataProvider, configureFRED } from '../../api/client'
 
 // AI Providers and Models
 const AI_VENDORS = [
@@ -106,8 +106,10 @@ export function TopBar() {
     serverConfig, selectedServerProvider, setSelectedServerProvider
   } = useChatSettings()
   const { cryptoExchange, setCryptoExchange, equitySource, setEquitySource, providerCredentials, setProviderCredential } = useDataSettings()
+  const { fredApiKey, setFredApiKey, fredConfigured, setFredConfigured } = useFredSettings()
   const [showSettings, setShowSettings] = useState(false)
   const [alpacaStatus, setAlpacaStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+  const [fredStatus, setFredStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>(fredConfigured ? 'connected' : 'idle')
   const settingsRef = useRef<HTMLDivElement>(null)
 
   // Get models for current AI vendor
@@ -353,6 +355,65 @@ export function TopBar() {
                     No API key required
                   </p>
                 )}
+              </div>
+
+              {/* FRED Macro Data */}
+              <div className="p-2 border-b border-[var(--border)] space-y-2">
+                <h4 className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider">Macro Data</h4>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[var(--text-secondary)]">FRED (Federal Reserve)</span>
+                  <span className={`text-xs ${fredStatus === 'connected' ? 'text-[var(--green-up)]' : 'text-[var(--text-tertiary)]'}`}>
+                    {fredStatus === 'connected' ? 'Connected' : fredStatus === 'connecting' ? 'Connecting...' : 'Not configured'}
+                  </span>
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--text-secondary)] block mb-1">API Key</label>
+                  <input
+                    type="password"
+                    value={fredApiKey}
+                    onChange={e => setFredApiKey(e.target.value)}
+                    placeholder="FRED API Key"
+                    className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                               rounded text-xs text-[var(--text-primary)] font-mono
+                               placeholder:text-[var(--text-tertiary)] outline-none
+                               focus:border-[var(--text-secondary)]"
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!fredApiKey) return
+                    setFredStatus('connecting')
+                    try {
+                      await configureFRED(fredApiKey)
+                      setFredStatus('connected')
+                      setFredConfigured(true)
+                    } catch {
+                      setFredStatus('error')
+                      setFredConfigured(false)
+                    }
+                  }}
+                  disabled={!fredApiKey || fredStatus === 'connecting'}
+                  className={`w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    fredStatus === 'connected'
+                      ? 'bg-[var(--green-up)]/20 text-[var(--green-up)] border border-[var(--green-up)]/30'
+                      : fredStatus === 'error'
+                        ? 'bg-[var(--red-down)]/20 text-[var(--red-down)] border border-[var(--red-down)]/30'
+                        : 'bg-white/5 text-[var(--text-primary)] border border-[var(--border)] hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  {fredStatus === 'connecting' ? 'Connecting...'
+                    : fredStatus === 'connected' ? 'Connected'
+                    : fredStatus === 'error' ? 'Failed — Retry'
+                    : 'Connect'}
+                </button>
+                <a
+                  href="https://fred.stlouisfed.org/docs/api/api_key.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-amber-400 hover:text-amber-300 inline-block"
+                >
+                  Get free key
+                </a>
               </div>
 
               {/* AI Settings */}

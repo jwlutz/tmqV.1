@@ -8,6 +8,7 @@ pandas-ta-classic
 vectorbt==0.28.1
 fastapi
 uvicorn[standard]
+fredapi
 
 [dev]
 pytest

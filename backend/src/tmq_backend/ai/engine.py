@@ -79,6 +79,43 @@ def execute_tool(name: str, args: dict) -> str:
             result = execute_analysis(args["code"], df)
             return json.dumps(result)
 
+        elif name == "tmq_macro":
+            from tmq_core.macro import fetch_macro
+
+            df = fetch_macro(
+                args["series_id"], args.get("start"), args.get("end")
+            )
+            return df.tail(60).to_json(orient="records")
+
+        elif name == "tmq_macro_search":
+            from tmq_core.macro import search_macro
+
+            results = search_macro(args["query"])
+            return json.dumps(results[:10], default=str)
+
+        elif name == "tmq_macro_backtest":
+            from tmq_core.macro import fetch_macro_multiple, align_macro_to_prices
+
+            df = fetch_ohlcv(
+                args["symbol"], "1d", args.get("start"), args.get("end")
+            )
+            macro = fetch_macro_multiple(
+                args["macro_series"], args.get("start"), args.get("end")
+            )
+            macro_aligned = align_macro_to_prices(macro, df)
+            result = execute_custom_strategy(
+                args["code"], df, macro_data=macro_aligned
+            )
+            return json.dumps(
+                {
+                    "metrics": result.metrics,
+                    "trade_count": len(result.trades),
+                    "trades_sample": result.trades[:10],
+                    "macro_series_used": args["macro_series"],
+                },
+                default=str,
+            )
+
         return json.dumps({"error": f"Unknown tool: {name}"})
 
     except Exception as e:

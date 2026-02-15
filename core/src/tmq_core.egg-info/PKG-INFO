@@ -12,6 +12,7 @@ Requires-Dist: pandas-ta-classic
 Requires-Dist: vectorbt==0.28.1
 Requires-Dist: fastapi
 Requires-Dist: uvicorn[standard]
+Requires-Dist: fredapi
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: httpx; extra == "dev"

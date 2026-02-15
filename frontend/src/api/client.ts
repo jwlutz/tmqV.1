@@ -187,6 +187,54 @@ export async function submitFeatureRequest(
   }
 }
 
+// Macro data types
+export interface MacroSeriesInfo {
+  id: string;
+  name: string;
+  category: string;
+  frequency: string;
+}
+
+export interface MacroDataPoint {
+  date: string;
+  value: number;
+}
+
+export async function configureFRED(apiKey: string) {
+  const res = await fetch(`${BASE_URL}/api/macro/configure`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ api_key: apiKey }),
+  });
+  return res.json();
+}
+
+export async function fetchMacroSeries(
+  seriesId: string,
+  start?: string,
+  end?: string
+): Promise<{ series_id: string; data: MacroDataPoint[] }> {
+  const res = await fetch(`${BASE_URL}/api/macro/fetch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ series_id: seriesId, start: start || "", end: end || "" }),
+  });
+  if (!res.ok) throw new Error(`Macro fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchPopularMacroSeries(): Promise<MacroSeriesInfo[]> {
+  const res = await fetch(`${BASE_URL}/api/macro/series`);
+  if (!res.ok) throw new Error(`Popular series fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function searchMacroSeries(query: string): Promise<Array<{ id: string; title: string; frequency: string; units: string }>> {
+  const res = await fetch(`${BASE_URL}/api/macro/search?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error(`Macro search failed: ${res.statusText}`);
+  return res.json();
+}
+
 // Server config types
 export interface ServerConfig {
   providers: Record<string, boolean>;
