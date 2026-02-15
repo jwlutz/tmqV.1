@@ -60,24 +60,32 @@ function CompareDropdown({ value, onChange, disabled, currentSymbol }: CompareDr
       <button
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border transition-colors ${
-          value
-            ? 'bg-[var(--accent-blue)]/20 border-[var(--accent-blue)] text-[var(--accent-blue)]'
-            : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-[var(--border-hover)]'
-        } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+        className={`flex items-center gap-1.5 px-2 py-1 rounded text-sm
+          bg-[var(--bg-darker)] border border-[var(--border)]
+          ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-[var(--text-secondary)] cursor-pointer'}
+          text-[var(--text-primary)] transition-colors`}
       >
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        {/* Compare icon - two overlapping lines */}
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
         </svg>
-        {value ? value : 'Compare'}
+        Compare
+        {value && (
+          <span className="px-1.5 py-0.5 text-xs rounded-full bg-[var(--accent-blue)]/20 text-[var(--accent-blue)]">
+            {value}
+          </span>
+        )}
         {value && (
           <button
             onClick={(e) => { e.stopPropagation(); onChange(null) }}
-            className="ml-1 hover:text-[var(--red-down)]"
+            className="ml-0.5 hover:text-[var(--red-down)]"
           >
             ×
           </button>
         )}
+        <svg className="w-3 h-3 text-[var(--text-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {isOpen && (
