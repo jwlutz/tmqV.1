@@ -4,6 +4,7 @@ Version: 0.1.0
 Requires-Python: >=3.10
 Requires-Dist: yfinance
 Requires-Dist: ccxt
+Requires-Dist: alpaca-py
 Requires-Dist: pandas
 Requires-Dist: numpy
 Requires-Dist: pydantic

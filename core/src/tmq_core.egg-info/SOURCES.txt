@@ -11,6 +11,7 @@ src/tmq_core.egg-info/SOURCES.txt
 src/tmq_core.egg-info/dependency_links.txt
 src/tmq_core.egg-info/requires.txt
 src/tmq_core.egg-info/top_level.txt
+tests/test_alpaca.py
 tests/test_backtest.py
 tests/test_data.py
 tests/test_indicators.py

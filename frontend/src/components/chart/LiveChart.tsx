@@ -19,6 +19,9 @@ export function LiveChart() {
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const lastCandleCountRef = useRef(0)
   const earliestTimeRef = useRef<number | null>(null)
+  const lastTimeRef = useRef<number | null>(null) // Track last timestamp to detect resets
+  const isResettingRef = useRef(false)
+  const chartDisposedRef = useRef(false) // Track if chart has been disposed
 
   // Compute date range from candles for indicator fetching
   const dateRange = useMemo(() => {
@@ -59,9 +62,29 @@ export function LiveChart() {
   useEffect(() => {
     lastCandleCountRef.current = 0
     earliestTimeRef.current = null
-    // Clear indicator series
+    lastTimeRef.current = null
+    isResettingRef.current = true // Flag that we're in a reset state
+
+    // Skip chart operations if disposed
+    if (chartDisposedRef.current) return
+
+    // Clear candle and volume series data to prevent stale data issues
+    if (candleSeriesRef.current) {
+      try {
+        candleSeriesRef.current.setData([])
+      } catch { /* ignore */ }
+    }
+    if (volumeSeriesRef.current) {
+      try {
+        volumeSeriesRef.current.setData([])
+      } catch { /* ignore */ }
+    }
+
+    // Clear indicator series (wrapped in try-catch since chart may be disposed)
     indicatorSeriesRef.current.forEach((series) => {
-      chartRef.current?.removeSeries(series)
+      try {
+        chartRef.current?.removeSeries(series)
+      } catch { /* ignore - chart may be disposed */ }
     })
     indicatorSeriesRef.current.clear()
   }, [contextSymbol, interval])
@@ -118,9 +141,10 @@ export function LiveChart() {
     chartRef.current = chart
     candleSeriesRef.current = candleSeries
     volumeSeriesRef.current = volumeSeries
+    chartDisposedRef.current = false // Chart is now active
 
     const handleResize = () => {
-      if (containerRef.current && chartRef.current) {
+      if (containerRef.current && chartRef.current && !chartDisposedRef.current) {
         chartRef.current.applyOptions({
           width: containerRef.current.clientWidth,
           height: containerRef.current.clientHeight,
@@ -131,6 +155,7 @@ export function LiveChart() {
     window.addEventListener('resize', handleResize)
 
     return () => {
+      chartDisposedRef.current = true // Mark as disposed before cleanup
       window.removeEventListener('resize', handleResize)
       chart.remove()
     }
@@ -138,65 +163,86 @@ export function LiveChart() {
 
   // Update chart when candles change
   useEffect(() => {
+    if (chartDisposedRef.current) return // Skip if chart is disposed
     if (!candleSeriesRef.current || !volumeSeriesRef.current || candles.length === 0) return
 
     const currentEarliestTime = candles[0].time
+    const currentLatestTime = candles[candles.length - 1].time
     const isPrepending = earliestTimeRef.current !== null && currentEarliestTime < earliestTimeRef.current
 
-    // If candle count changed significantly (initial load, reset, or prepend), set all data
-    if (Math.abs(candles.length - lastCandleCountRef.current) > 5) {
-      const chartCandles = candles.map(c => ({
-        time: c.time as UTCTimestamp,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }))
+    // Detect if this is a reset: timestamps went backwards or we flagged a reset
+    const isReset = isResettingRef.current ||
+      (lastTimeRef.current !== null && currentLatestTime < lastTimeRef.current) ||
+      Math.abs(candles.length - lastCandleCountRef.current) > 5
 
-      const chartVolume = candles.map(c => ({
-        time: c.time as UTCTimestamp,
-        value: c.volume ?? 0,
-        color: c.close >= c.open ? '#22c55e80' : '#ef444480',
-      }))
+    try {
+      if (isReset) {
+        const chartCandles = candles.map(c => ({
+          time: c.time as UTCTimestamp,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }))
 
-      candleSeriesRef.current.setData(chartCandles)
-      volumeSeriesRef.current.setData(chartVolume)
+        const chartVolume = candles.map(c => ({
+          time: c.time as UTCTimestamp,
+          value: c.volume ?? 0,
+          color: c.close >= c.open ? '#22c55e80' : '#ef444480',
+        }))
 
-      // Only fitContent on initial load, not when prepending older candles
-      if (!isPrepending) {
-        chartRef.current?.timeScale().fitContent()
+        candleSeriesRef.current.setData(chartCandles)
+        volumeSeriesRef.current.setData(chartVolume)
+
+        // Only fitContent on initial load, not when prepending older candles
+        if (!isPrepending) {
+          chartRef.current?.timeScale().fitContent()
+        }
+
+        lastCandleCountRef.current = candles.length
+        earliestTimeRef.current = currentEarliestTime
+        lastTimeRef.current = currentLatestTime
+        isResettingRef.current = false // Clear reset flag
+      } else {
+        // Incremental update - just update the last candle
+        const lastCandle = candles[candles.length - 1]
+
+        // Safety check: only update if new timestamp >= last timestamp
+        if (lastTimeRef.current === null || lastCandle.time >= lastTimeRef.current) {
+          candleSeriesRef.current.update({
+            time: lastCandle.time as UTCTimestamp,
+            open: lastCandle.open,
+            high: lastCandle.high,
+            low: lastCandle.low,
+            close: lastCandle.close,
+          })
+          volumeSeriesRef.current.update({
+            time: lastCandle.time as UTCTimestamp,
+            value: lastCandle.volume ?? 0,
+            color: lastCandle.close >= lastCandle.open ? '#22c55e80' : '#ef444480',
+          })
+          lastCandleCountRef.current = candles.length
+          lastTimeRef.current = lastCandle.time
+        }
       }
-
-      lastCandleCountRef.current = candles.length
-      earliestTimeRef.current = currentEarliestTime
-    } else {
-      // Incremental update - just update the last candle
-      const lastCandle = candles[candles.length - 1]
-      candleSeriesRef.current.update({
-        time: lastCandle.time as UTCTimestamp,
-        open: lastCandle.open,
-        high: lastCandle.high,
-        low: lastCandle.low,
-        close: lastCandle.close,
-      })
-      volumeSeriesRef.current.update({
-        time: lastCandle.time as UTCTimestamp,
-        value: lastCandle.volume ?? 0,
-        color: lastCandle.close >= lastCandle.open ? '#22c55e80' : '#ef444480',
-      })
-      lastCandleCountRef.current = candles.length
+    } catch (e) {
+      // If update fails, force a full reset on next render
+      console.warn('Chart update failed, will reset:', e)
+      isResettingRef.current = true
     }
   }, [candles])
 
   // Update indicator series when indicator data changes
   useEffect(() => {
-    if (!chartRef.current) return
+    if (chartDisposedRef.current || !chartRef.current) return
 
     // Remove series for deselected indicators
     indicatorSeriesRef.current.forEach((series, id) => {
       const baseId = id.split('-bb_')[0] // Handle bbands sub-series
       if (!selectedIds.includes(baseId) && !selectedIds.includes(id)) {
-        chartRef.current?.removeSeries(series)
+        try {
+          chartRef.current?.removeSeries(series)
+        } catch { /* ignore - chart may be disposed */ }
         indicatorSeriesRef.current.delete(id)
       }
     })
@@ -235,6 +281,20 @@ export function LiveChart() {
           })
         }
 
+        // Add horizontal reference lines at configured levels
+        if (config.levels) {
+          config.levels.forEach(level => {
+            series!.createPriceLine({
+              price: level,
+              color: 'rgba(255, 255, 255, 0.3)',
+              lineWidth: 1,
+              lineStyle: 2, // Dashed
+              axisLabelVisible: true,
+              title: '',
+            })
+          })
+        }
+
         indicatorSeriesRef.current.set(config.id, series)
       }
 
@@ -246,9 +306,16 @@ export function LiveChart() {
           time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
           value: Number(p[valueKey]),
         }))
+        // Sort by time and deduplicate (keep last value for each timestamp)
+        .sort((a, b) => a.time - b.time)
+        .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
 
       if (seriesData.length > 0) {
-        series.setData(seriesData)
+        try {
+          series.setData(seriesData)
+        } catch (e) {
+          console.warn(`Failed to set indicator data for ${config.id}:`, e)
+        }
       }
     })
   }, [activeIndicators, selectedIds])
@@ -299,19 +366,26 @@ export function LiveChart() {
           time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
           value: Number(p[key]),
         }))
+        // Sort by time and deduplicate
+        .sort((a, b) => a.time - b.time)
+        .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
 
       if (seriesData.length > 0) {
-        series.setData(seriesData)
+        try {
+          series.setData(seriesData)
+        } catch (e) {
+          console.warn(`Failed to set Bollinger band data:`, e)
+        }
       }
     })
   }
 
   // Lazy load more history when user scrolls/zooms near left edge
   useEffect(() => {
-    if (!chartRef.current) return
+    if (chartDisposedRef.current || !chartRef.current) return
 
     const handleVisibleRangeChange = (range: { from: number; to: number } | null) => {
-      if (!range) return
+      if (!range || chartDisposedRef.current) return
       // If user is within 10 bars of the left edge, load more
       if (range.from < 10 && !isLoadingMore) {
         loadMoreHistory()
@@ -321,7 +395,9 @@ export function LiveChart() {
     chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleRangeChange)
 
     return () => {
-      chartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange)
+      try {
+        chartRef.current?.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange)
+      } catch { /* ignore - chart may be disposed */ }
     }
   }, [loadMoreHistory, isLoadingMore])
 

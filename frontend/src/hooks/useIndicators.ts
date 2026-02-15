@@ -9,6 +9,7 @@ export interface IndicatorConfig {
   params: Record<string, number>;
   pane?: 'main' | 'separate'; // 'separate' for RSI, Stoch, etc.
   bounds?: { min: number; max: number }; // y-axis bounds for oscillators
+  levels?: number[];    // horizontal reference lines (e.g., [30, 70] for RSI)
 }
 
 export const AVAILABLE_INDICATORS: IndicatorConfig[] = [
@@ -22,12 +23,12 @@ export const AVAILABLE_INDICATORS: IndicatorConfig[] = [
   { id: 'bbands', name: 'bbands', label: 'Bollinger', color: '#6366f1', params: { length: 20, std: 2 }, pane: 'main' },
 
   // Bounded Oscillators (0-100)
-  { id: 'rsi-14', name: 'rsi', label: 'RSI', color: '#ec4899', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 } },
-  { id: 'stoch', name: 'stoch', label: 'Stochastic', color: '#f97316', params: { k: 14, d: 3 }, pane: 'separate', bounds: { min: 0, max: 100 } },
-  { id: 'adx-14', name: 'adx', label: 'ADX', color: '#a855f7', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 } },
+  { id: 'rsi-14', name: 'rsi', label: 'RSI', color: '#ec4899', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [30, 70] },
+  { id: 'stoch', name: 'stoch', label: 'Stochastic', color: '#f97316', params: { k: 14, d: 3 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [20, 80] },
+  { id: 'adx-14', name: 'adx', label: 'ADX', color: '#a855f7', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [25, 50] },
 
   // Unbounded Oscillators (auto-scale)
-  { id: 'macd', name: 'macd', label: 'MACD', color: '#14b8a6', params: {}, pane: 'separate' },
+  { id: 'macd', name: 'macd', label: 'MACD', color: '#14b8a6', params: {}, pane: 'separate', levels: [0] },
   { id: 'atr-14', name: 'atr', label: 'ATR', color: '#eab308', params: { length: 14 }, pane: 'separate' },
   { id: 'obv', name: 'obv', label: 'OBV', color: '#64748b', params: {}, pane: 'separate' },
 ];

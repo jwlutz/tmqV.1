@@ -1,5 +1,6 @@
 yfinance
 ccxt
+alpaca-py
 pandas
 numpy
 pydantic
