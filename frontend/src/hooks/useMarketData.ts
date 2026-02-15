@@ -47,8 +47,11 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
   const wsRef = useRef<WSClient | null>(null)
   const lastUpdateRef = useRef<number>(0)
 
-  // Fetch historical candles on mount
+  // Clear stale data and fetch fresh history when symbol changes
   useEffect(() => {
+    setCandles([])
+    setCurrentCandle(null)
+    setHasMoreHistory(true)
     let cancelled = false
 
     async function loadHistory() {

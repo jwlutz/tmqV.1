@@ -1,16 +1,24 @@
 import { useEffect, useRef } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp } from 'lightweight-charts'
 import { useMarketData } from '../../hooks'
+import { useSymbol } from '../../context'
 import { LoadingOverlay } from '../ui'
 
 export function LiveChart() {
-  const { candles, status, symbol, loadMoreHistory, isLoadingMore } = useMarketData('BTC-USD', '1m')
+  const { symbol: contextSymbol } = useSymbol()
+  const { candles, status, symbol, loadMoreHistory, isLoadingMore } = useMarketData(contextSymbol, '1m')
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
   const lastCandleCountRef = useRef(0)
   const earliestTimeRef = useRef<number | null>(null) // Track earliest candle time for prepend detection
+
+  // Reset chart tracking refs when symbol changes
+  useEffect(() => {
+    lastCandleCountRef.current = 0
+    earliestTimeRef.current = null
+  }, [contextSymbol])
 
   // Create chart on mount
   useEffect(() => {

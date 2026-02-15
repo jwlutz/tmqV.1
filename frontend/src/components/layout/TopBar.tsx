@@ -1,14 +1,18 @@
 import { useMode } from '../../context'
+import { TickerPicker } from './TickerPicker'
 
 export function TopBar() {
   const { mode, setMode } = useMode()
 
   return (
     <header className="h-14 flex-none bg-[var(--bg-dark)] border-b border-[var(--border)] flex items-center justify-between px-3 md:px-4">
-      <span className="text-lg font-semibold text-[var(--text-primary)]">
-        <span className="hidden sm:inline">thats_my_quant</span>
-        <span className="sm:hidden">TMQ</span>
-      </span>
+      <div className="flex items-center gap-3">
+        <span className="text-lg font-semibold text-[var(--text-primary)]">
+          <span className="hidden sm:inline">thats_my_quant</span>
+          <span className="sm:hidden">TMQ</span>
+        </span>
+        <TickerPicker />
+      </div>
 
       <div className="flex items-center rounded-full border border-[var(--border)] p-0.5 md:p-1">
         <button

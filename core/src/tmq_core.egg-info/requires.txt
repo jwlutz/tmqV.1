@@ -4,6 +4,10 @@ pandas
 numpy
 pydantic
 pandas-ta-classic
+vectorbt==0.28.1
+fastapi
+uvicorn[standard]
 
 [dev]
 pytest
+httpx
