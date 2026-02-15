@@ -168,6 +168,25 @@ export async function runCustomBacktest(
   return res.json();
 }
 
+export async function submitFeatureRequest(
+  message: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${BASE_URL}/api/feature-request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data.detail || "Request failed" };
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Network error" };
+  }
+}
+
 export interface ChatSSEEvent {
   type: "text" | "tool_call" | "tool_result" | "done";
   content?: string;

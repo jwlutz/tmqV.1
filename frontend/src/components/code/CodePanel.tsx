@@ -1,19 +1,18 @@
 import { useState, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
 import { useCodePanel, useChartLayout, useInterval, useBacktest, APIBacktestResult } from '../../context'
-import { runCustomBacktest } from '../../api/client'
+import { runCustomBacktest, submitFeatureRequest } from '../../api/client'
 
-const DEFAULT_CODE = `def generate_signals(df):
-    """
-    df has columns: date, open, high, low, close, volume
-    Return (entries, exits) as boolean Series.
-    """
-    # Example: SMA crossover
-    fast = df['close'].rolling(10).mean()
-    slow = df['close'].rolling(30).mean()
-    entries = (fast > slow) & (fast.shift(1) <= slow.shift(1))
-    exits = (fast < slow) & (fast.shift(1) >= slow.shift(1))
-    return entries.fillna(False), exits.fillna(False)
+const DEFAULT_CODE = `#  _____ _           _   _       __  __          ___                   _
+# |_   _| |__   __ _| |_( )___  |  \/  |_   _   / _ \\ _   _  __ _ _ __ | |_
+#   | | | '_ \\ / _\` | __|// __| | |\\/| | | | | | | | | | | |/ _\` | '_ \\| __|
+#   | | | | | | (_| | |_  \\__ \\ | |  | | |_| | | |_| | |_| | (_| | | | | |_
+#   |_| |_| |_|\\__,_|\\__| |___/ |_|  |_|\\__, |  \\__\\_\\\\__,_|\\__,_|_| |_|\\__|
+#                                       |___/
+#
+# Custom scripting coming soon...
+# Request a feature: type /request <your idea> and hit Run
+#
 `
 
 // Calculate date range based on interval
@@ -54,6 +53,19 @@ export function CodePanel() {
     setLastMetrics(null)
 
     try {
+      // Check for /request command
+      const requestMatch = code.match(/^\/request\s+(.+)/s)
+      if (requestMatch) {
+        const message = requestMatch[1].trim()
+        const result = await submitFeatureRequest(message)
+        if (result.success) {
+          setLastMetrics('Request submitted! Thanks for the feedback.')
+        } else {
+          setError(result.error || 'Failed to submit request')
+        }
+        return
+      }
+
       // Convert symbol format for API: BTC-USD → BTC/USD
       const apiSymbol = activeSymbol.replace('-', '/')
       const { start, end } = getDateRange(interval)

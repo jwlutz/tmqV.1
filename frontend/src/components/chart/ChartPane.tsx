@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp } from 'lightweight-charts'
-import { useMarketData, isCryptoSymbol } from '../../hooks'
+import { useMarketData } from '../../hooks'
 import { useIndicators, IndicatorData } from '../../hooks/useIndicators'
 import { useMarketStats } from '../../hooks/useMarketStats'
 import { useDataSettings } from '../../context'
@@ -427,45 +427,31 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
         const res = await fetchOHLCV(apiSymbol, interval, dateRange.start!, dateRange.end!)
         if (cancelled) return
 
-        if (res.data?.length > 0) {
-          const rawData = res.data.map((d: { date: string; close: number }) => ({
-            time: Math.floor(new Date(d.date).getTime() / 1000) as UTCTimestamp,
-            value: d.close,
-          }))
+        if (res.data?.length > 0 && candles.length > 0) {
+          // Build a map of compare dates (YYYY-MM-DD) to close values
+          // This handles timezone mismatches between data sources
+          const compareDateMap = new Map<string, number>()
+          res.data.forEach((d: { date: string; close: number }) => {
+            compareDateMap.set(d.date, d.close)
+          })
 
-          // Align timestamps if mixing crypto/equity
-          const mainIsCrypto = isCryptoSymbol(symbol)
-          const compareIsCrypto = isCryptoSymbol(compareSymbol!)
+          const aligned: Array<{ time: UTCTimestamp; value: number }> = []
+          let lastValue: number | null = null
 
-          if (mainIsCrypto !== compareIsCrypto && candles.length > 0) {
-            // Carry-forward alignment for gaps
-            const mainTimestamps = candles.map(c => c.time)
-            const compareMap = new Map<number, number>()
-            rawData.forEach((d: { time: number; value: number }) => compareMap.set(d.time, d.value))
-            const sorted = [...rawData].sort((a: { time: number }, b: { time: number }) => a.time - b.time)
+          for (const candle of candles) {
+            // Convert main candle timestamp to date string for matching
+            const mainDateStr = new Date(candle.time * 1000).toISOString().split('T')[0]
 
-            const aligned: Array<{ time: UTCTimestamp; value: number }> = []
-            let lastValue: number | null = null
-            let idx = 0
-
-            for (const t of mainTimestamps) {
-              if (compareMap.has(t)) {
-                lastValue = compareMap.get(t)!
-                aligned.push({ time: t as UTCTimestamp, value: lastValue })
-              } else {
-                while (idx < sorted.length && sorted[idx].time <= t) {
-                  lastValue = sorted[idx].value
-                  idx++
-                }
-                if (lastValue !== null) {
-                  aligned.push({ time: t as UTCTimestamp, value: lastValue })
-                }
-              }
+            if (compareDateMap.has(mainDateStr)) {
+              lastValue = compareDateMap.get(mainDateStr)!
+              aligned.push({ time: candle.time as UTCTimestamp, value: lastValue })
+            } else if (lastValue !== null) {
+              // Carry forward last known value for gaps (weekends, holidays)
+              aligned.push({ time: candle.time as UTCTimestamp, value: lastValue })
             }
-            setCompareData(aligned)
-          } else {
-            setCompareData(rawData)
           }
+
+          setCompareData(aligned)
         }
       } catch (err) {
         console.warn('Failed to fetch comparison data:', err)

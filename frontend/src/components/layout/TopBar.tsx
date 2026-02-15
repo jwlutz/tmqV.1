@@ -120,10 +120,15 @@ export function TopBar() {
   return (
     <header className="h-12 flex-none bg-[var(--bg-dark)] border-b border-[var(--border)] flex items-center justify-between px-3 md:px-4">
       <div className="flex items-center gap-3">
-        <span className="text-base font-semibold text-[var(--text-primary)]">
+        <a
+          href="https://github.com/jwlutz/tmqV.1"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-base font-semibold text-[var(--text-primary)] hover:text-[var(--green-up)] transition-colors"
+        >
           <span className="hidden sm:inline">thats_my_quant</span>
           <span className="sm:hidden">TMQ</span>
-        </span>
+        </a>
       </div>
 
       <div className="flex items-center gap-2">

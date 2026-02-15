@@ -6,12 +6,12 @@ const COMPARE_SYMBOLS = [
   { value: 'BTC-USD', label: 'BTC' },
   { value: 'ETH-USD', label: 'ETH' },
   { value: 'SOL-USD', label: 'SOL' },
-  // Equities
+  // Equities & ETFs
   { value: 'SPY', label: 'SPY' },
   { value: 'QQQ', label: 'QQQ' },
   { value: 'GLD', label: 'GLD' },
   { value: 'TLT', label: 'TLT' },
-  { value: 'DXY', label: 'DXY' },
+  { value: 'DX-Y.NYB', label: 'DXY' },  // Dollar Index (yfinance symbol)
 ]
 
 interface CompareDropdownProps {
