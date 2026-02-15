@@ -133,7 +133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const activePaneIdRef = useRef(activePaneId);
   activePaneIdRef.current = activePaneId;
   // Code panel
-  const [codePanelOpen, setCodePanelOpen] = useState(false);
+  const [codePanelOpen, setCodePanelOpen] = useState(true);
   const [sandboxCode, setSandboxCode] = useState('');
 
   const setProviderCredential = useCallback(<K extends keyof ProviderCredentials>(

@@ -43,10 +43,12 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
   const isResettingRef = useRef(false)
   const chartDisposedRef = useRef(false)
 
-  // Comparison symbol state
+  // Comparison symbol state - stores percent change data for both main and compare
   const [compareSymbol, setCompareSymbol] = useState<string | null>(null)
   const [compareData, setCompareData] = useState<Array<{ time: UTCTimestamp; value: number }>>([])
+  const [mainPctData, setMainPctData] = useState<Array<{ time: UTCTimestamp; value: number }>>([])
   const [, setCompareLoading] = useState(false)
+  const mainPctSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
 
   // Show delayed data banner for equities without a live provider
   const hasAlpaca = !!providerCredentials.alpaca?.apiKey
@@ -130,6 +132,10 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
       },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
+      leftPriceScale: {
+        visible: false,  // Hidden by default, shown when comparing
+        borderColor: 'rgba(59, 130, 246, 0.3)',
+      },
       timeScale: {
         borderColor: 'rgba(255,255,255,0.06)',
         timeVisible: true,
@@ -411,10 +417,11 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
     }
   }, [loadMoreHistory, isLoadingMore])
 
-  // Fetch comparison symbol data
+  // Fetch comparison symbol data and compute percent changes
   useEffect(() => {
     if (!compareSymbol || !dateRange.start || !dateRange.end) {
       setCompareData([])
+      setMainPctData([])
       return
     }
 
@@ -429,33 +436,50 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
 
         if (res.data?.length > 0 && candles.length > 0) {
           // Build a map of compare dates (YYYY-MM-DD) to close values
-          // This handles timezone mismatches between data sources
           const compareDateMap = new Map<string, number>()
           res.data.forEach((d: { date: string; close: number }) => {
             compareDateMap.set(d.date, d.close)
           })
 
+          // Align compare data to main chart timestamps
           const aligned: Array<{ time: UTCTimestamp; value: number }> = []
           let lastValue: number | null = null
 
           for (const candle of candles) {
-            // Convert main candle timestamp to date string for matching
             const mainDateStr = new Date(candle.time * 1000).toISOString().split('T')[0]
 
             if (compareDateMap.has(mainDateStr)) {
               lastValue = compareDateMap.get(mainDateStr)!
               aligned.push({ time: candle.time as UTCTimestamp, value: lastValue })
             } else if (lastValue !== null) {
-              // Carry forward last known value for gaps (weekends, holidays)
               aligned.push({ time: candle.time as UTCTimestamp, value: lastValue })
             }
           }
 
-          setCompareData(aligned)
+          if (aligned.length > 0) {
+            const baselineCompare = aligned[0].value
+            const baselineMain = candles[0].close
+
+            // Compute percent change from start for compare symbol
+            const comparePct = aligned.map(d => ({
+              time: d.time,
+              value: ((d.value - baselineCompare) / baselineCompare) * 100
+            }))
+
+            // Compute percent change from start for main symbol
+            const mainPct = candles.map(c => ({
+              time: c.time as UTCTimestamp,
+              value: ((c.close - baselineMain) / baselineMain) * 100
+            }))
+
+            setCompareData(comparePct)
+            setMainPctData(mainPct)
+          }
         }
       } catch (err) {
         console.warn('Failed to fetch comparison data:', err)
         setCompareData([])
+        setMainPctData([])
       } finally {
         if (!cancelled) setCompareLoading(false)
       }
@@ -468,7 +492,7 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
   // Track the current compare symbol for the series
   const compareSymbolForSeriesRef = useRef<string | null>(null)
 
-  // Render comparison series
+  // Render comparison series with percent change on left Y-axis
   useEffect(() => {
     if (chartDisposedRef.current || !chartRef.current) return
     const chart = chartRef.current
@@ -479,9 +503,15 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
         try { chart.removeSeries(compareSeriesRef.current) } catch { /* ignore */ }
         compareSeriesRef.current = null
         compareSymbolForSeriesRef.current = null
-        // Hide left scale
-        chart.priceScale('left').applyOptions({ visible: false })
       }
+      if (mainPctSeriesRef.current) {
+        try { chart.removeSeries(mainPctSeriesRef.current) } catch { /* ignore */ }
+        mainPctSeriesRef.current = null
+      }
+      // Hide left scale when not comparing
+      try {
+        chart.applyOptions({ leftPriceScale: { visible: false } })
+      } catch { /* ignore */ }
       return
     }
 
@@ -492,22 +522,47 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
     }
 
     // Wait for data before creating series
-    if (compareData.length === 0) return
+    if (compareData.length === 0 || mainPctData.length === 0) return
 
-    // Create series if needed
-    if (!compareSeriesRef.current) {
+    // Create main percent change series (shows main symbol as % change on left axis)
+    if (!mainPctSeriesRef.current) {
       try {
-        compareSeriesRef.current = chart.addSeries(LineSeries, {
-          color: '#fbbf24',
+        mainPctSeriesRef.current = chart.addSeries(LineSeries, {
+          color: '#3b82f6',  // Blue for main
           lineWidth: 2,
           priceScaleId: 'left',
           lastValueVisible: true,
           priceLineVisible: false,
-          title: compareSymbol,
+          title: symbol,
+          priceFormat: {
+            type: 'custom',
+            formatter: (price: number) => `${price >= 0 ? '+' : ''}${price.toFixed(1)}%`,
+          },
         })
-        chart.priceScale('left').applyOptions({
-          visible: true,
-          borderColor: 'rgba(255, 191, 36, 0.3)',
+        // Configure the left price scale for percentages
+        mainPctSeriesRef.current.priceScale().applyOptions({
+          scaleMargins: { top: 0.1, bottom: 0.2 },
+          borderColor: 'rgba(59, 130, 246, 0.5)',
+        })
+      } catch (e) {
+        console.warn('Failed to create main pct series:', e)
+      }
+    }
+
+    // Create compare percent change series
+    if (!compareSeriesRef.current) {
+      try {
+        compareSeriesRef.current = chart.addSeries(LineSeries, {
+          color: '#fbbf24',  // Amber for compare
+          lineWidth: 2,
+          priceScaleId: 'left',  // Same left axis as main pct
+          lastValueVisible: true,
+          priceLineVisible: false,
+          title: compareSymbol,
+          priceFormat: {
+            type: 'custom',
+            formatter: (price: number) => `${price >= 0 ? '+' : ''}${price.toFixed(1)}%`,
+          },
         })
         compareSymbolForSeriesRef.current = compareSymbol
       } catch (e) {
@@ -516,25 +571,40 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
       }
     }
 
+    // Update data
     try {
+      mainPctSeriesRef.current?.setData(mainPctData)
       compareSeriesRef.current.setData(compareData)
+      // Show left scale when comparing
+      chart.applyOptions({ leftPriceScale: { visible: true } })
     } catch (e) {
       console.warn('Failed to set comparison data:', e)
     }
-  }, [compareSymbol, compareData])
+  }, [compareSymbol, compareData, mainPctData, symbol])
 
   // Clear comparison when main symbol changes
   useEffect(() => {
     // Skip initial mount
     if (!compareSeriesRef.current && !compareSymbol) return
 
-    if (compareSeriesRef.current && chartRef.current && !chartDisposedRef.current) {
-      try { chartRef.current.removeSeries(compareSeriesRef.current) } catch { /* ignore */ }
-      compareSeriesRef.current = null
-      compareSymbolForSeriesRef.current = null
+    if (chartRef.current && !chartDisposedRef.current) {
+      if (compareSeriesRef.current) {
+        try { chartRef.current.removeSeries(compareSeriesRef.current) } catch { /* ignore */ }
+        compareSeriesRef.current = null
+        compareSymbolForSeriesRef.current = null
+      }
+      if (mainPctSeriesRef.current) {
+        try { chartRef.current.removeSeries(mainPctSeriesRef.current) } catch { /* ignore */ }
+        mainPctSeriesRef.current = null
+      }
+      // Hide left scale when clearing comparison
+      try {
+        chartRef.current.applyOptions({ leftPriceScale: { visible: false } })
+      } catch { /* ignore */ }
     }
     setCompareSymbol(null)
     setCompareData([])
+    setMainPctData([])
   }, [symbol])
 
   return (
@@ -676,7 +746,7 @@ export function ChartPane({ symbol, interval, isActive, onActivate, onSymbolChan
       )}
 
       {/* Chart container */}
-      <div className="relative flex-1">
+      <div className="relative flex-1 min-h-0">
         <div ref={containerRef} className="w-full h-full" />
 
         {(status === 'connecting' || (candles.length < 5 && status !== 'error')) && (
