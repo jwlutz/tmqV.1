@@ -2,46 +2,103 @@
 
 A crypto and equities charting platform with AI-assisted backtesting.
 
+## Quick Start
+
+```bash
+# 1. Install dependencies
+cd core && pip install -e . && cd ..
+cd backend && pip install -e . && cd ..
+cd frontend && npm install && cd ..
+
+# 2. Configure API keys (optional but recommended)
+cp .env.example .env
+# Edit .env with your API keys
+
+# 3. Run everything
+tmq
+```
+
+Open http://localhost:5173 in your browser.
+
 ## Prerequisites
 
 - **Node.js** 18+ (for frontend)
 - **Python** 3.10+ (for backend)
 
-### 1. Backend Setup
+## Installation
+
+### 1. Core Library
 
 ```bash
 cd core
 pip install -e .
 ```
 
-### 2. Frontend Setup
+### 2. Backend
+
+```bash
+cd backend
+pip install -e .
+```
+
+### 3. Frontend
 
 ```bash
 cd frontend
 npm install
 ```
 
-### 3. Run Both Services
+## Configuration
 
-**Terminal 1 - Backend (port 8000):**
+### API Keys (.env)
+
+Create a `.env` file in the project root with your API keys:
+
 ```bash
-cd core
-python -m tmq_core.server
+# AI Providers (at least one recommended)
+ANTHROPIC_API_KEY=sk-ant-...      # Anthropic (Claude)
+OPENROUTER_API_KEY=sk-or-v1-...   # OpenRouter (access to all models)
+OPENAI_API_KEY=sk-...             # OpenAI (GPT)
+GOOGLE_API_KEY=...                # Google (Gemini)
+XAI_API_KEY=...                   # xAI (Grok)
+
+# Data Providers (optional)
+ALPACA_API_KEY=...
+ALPACA_SECRET_KEY=...
+ALPACA_API_ENDPOINT=https://paper-api.alpaca.markets/v2
 ```
 
-**Terminal 2 - Frontend (port 5173):**
+When you run the app, configured providers will appear in Settings with a checkmark. You can select which provider to use, or enter a custom API key.
+
+### Running the App
+
+**Option A: CLI (recommended)**
+
+```bash
+tmq
+```
+
+This starts both backend (port 8000) and frontend (port 5173), automatically loading `.env`.
+
+**Option B: Manual (two terminals)**
+
+Terminal 1 - Backend:
+```bash
+cd backend
+uvicorn tmq_backend.main:app --reload
+```
+
+Terminal 2 - Frontend:
 ```bash
 cd frontend
 npm run dev
 ```
 
-Open http://localhost:5173 in your browser.
+## Providers
 
-Set API keys for data providers and LLM in settings.
-
-- AI support for OpenAI, Anthropic, Gemini, Grok
-- Crypto Data Support API-key free from Coinbase, Binance, Kraken, Bybit, OKX
-- Data Provider support Alpaca, polygon
+- **AI**: OpenAI, Anthropic, Google, xAI, OpenRouter (unified access)
+- **Crypto Data**: Coinbase, Binance, Kraken, Bybit, OKX (API-key free)
+- **Equity Data**: Yahoo Finance (free), Alpaca, Polygon
 
 ## Features
 

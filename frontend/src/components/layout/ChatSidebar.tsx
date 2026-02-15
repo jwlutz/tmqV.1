@@ -8,12 +8,18 @@ export function ChatSidebar() {
   const { setBacktestResult } = useBacktest();
   const {
     apiKey, model,
-    useOpenRouter, openRouterApiKey, openRouterModel
+    useOpenRouter, openRouterApiKey, openRouterModel,
+    selectedServerProvider
   } = useChatSettings();
 
-  // Compute effective API key and model based on OpenRouter mode
+  // Compute effective API key and model based on provider selection
+  // If server provider is selected, apiKey is ignored (server-side key used)
   const effectiveApiKey = useOpenRouter ? openRouterApiKey : apiKey;
-  const effectiveModel = useOpenRouter ? openRouterModel : model;
+  const effectiveModel = (selectedServerProvider === 'openrouter' || useOpenRouter)
+    ? openRouterModel
+    : model;
+  const effectiveUseOpenRouter = selectedServerProvider === 'openrouter' || useOpenRouter;
+
   const { setCodePanelOpen, setSandboxCode } = useCodePanel();
   const [isOpen, setIsOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -26,7 +32,8 @@ export function ChatSidebar() {
   const { messages, isTyping, sendMessage } = useChat({
     apiKey: effectiveApiKey,
     model: effectiveModel,
-    useOpenRouter,
+    useOpenRouter: effectiveUseOpenRouter,
+    serverProvider: selectedServerProvider,
     onBacktestResult: setBacktestResult,
     onCustomCode: handleCustomCode,
   });
