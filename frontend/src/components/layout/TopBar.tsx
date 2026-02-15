@@ -38,6 +38,32 @@ const XAI_MODELS = [
   { value: 'grok-code-fast-1', label: 'Grok Code Fast' },
 ]
 
+// OpenRouter models (provider/model format) - Updated Feb 2026
+const OPENROUTER_MODELS = [
+  // Anthropic (Claude) - XML prompts
+  { value: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5 (Fast)', provider: 'anthropic' },
+  { value: 'anthropic/claude-sonnet-4.5', label: 'Claude Sonnet 4.5', provider: 'anthropic' },
+  { value: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6', provider: 'anthropic' },
+  { value: 'anthropic/claude-opus-4.5', label: 'Claude Opus 4.5', provider: 'anthropic' },
+  // OpenAI (GPT) - Markdown prompts
+  { value: 'openai/gpt-5.2-pro', label: 'GPT-5.2 Pro', provider: 'openai' },
+  { value: 'openai/gpt-5.2', label: 'GPT-5.2', provider: 'openai' },
+  { value: 'openai/gpt-5.2-codex', label: 'GPT-5.2 Codex', provider: 'openai' },
+  { value: 'openai/gpt-5.2-chat', label: 'GPT-5.2 Chat', provider: 'openai' },
+  // Google (Gemini) - Concise prompts
+  { value: 'google/gemini-3-pro-preview', label: 'Gemini 3 Pro', provider: 'google' },
+  { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash', provider: 'google' },
+  { value: 'google/gemini-3-pro-image-preview', label: 'Gemini 3 Pro Image', provider: 'google' },
+  // xAI (Grok) - uses OpenAI format
+  { value: 'x-ai/grok-4.1-fast', label: 'Grok 4.1 Fast', provider: 'openai' },
+  // DeepSeek - uses OpenAI format
+  { value: 'deepseek/deepseek-v3.2-20251201', label: 'DeepSeek V3.2', provider: 'openai' },
+  { value: 'deepseek/deepseek-v3.2-speciale-20251201', label: 'DeepSeek V3.2 Speciale', provider: 'openai' },
+  // Mistral - uses OpenAI format
+  { value: 'mistralai/mistral-large-2512', label: 'Mistral Large', provider: 'openai' },
+  { value: 'mistralai/devstral-2512', label: 'Devstral', provider: 'openai' },
+]
+
 // Data Sources
 const CRYPTO_EXCHANGES = [
   { value: 'coinbase', label: 'Coinbase' },
@@ -64,7 +90,11 @@ function getModelsForVendor(vendor: string) {
 
 export function TopBar() {
   const { mode, setMode } = useMode()
-  const { apiKey, setApiKey, model, setModel, aiVendor, setAiVendor } = useChatSettings()
+  const {
+    apiKey, setApiKey, model, setModel, aiVendor, setAiVendor,
+    useOpenRouter, setUseOpenRouter, openRouterApiKey, setOpenRouterApiKey,
+    openRouterModel, setOpenRouterModel
+  } = useChatSettings()
   const { cryptoExchange, setCryptoExchange, equitySource, setEquitySource, providerCredentials, setProviderCredential } = useDataSettings()
   const [showSettings, setShowSettings] = useState(false)
   const [alpacaStatus, setAlpacaStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
@@ -312,47 +342,122 @@ export function TopBar() {
               {/* AI Settings */}
               <div className="p-2 space-y-2">
                 <h4 className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider">AI</h4>
-                <div>
-                  <label className="text-xs text-[var(--text-secondary)] block mb-1">Provider</label>
-                  <select
-                    value={aiVendor}
-                    onChange={e => setAiVendor(e.target.value)}
-                    className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
-                               rounded text-xs text-[var(--text-primary)]
-                               outline-none focus:border-[var(--text-secondary)]"
+
+                {/* OpenRouter Toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-[var(--text-secondary)]">Use OpenRouter</label>
+                  <button
+                    onClick={() => setUseOpenRouter(!useOpenRouter)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      useOpenRouter ? 'bg-[var(--green-up)]' : 'bg-[var(--bg-medium)] border border-[var(--border)]'
+                    }`}
                   >
-                    {AI_VENDORS.map(v => (
-                      <option key={v.value} value={v.value}>{v.label}</option>
-                    ))}
-                  </select>
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        useOpenRouter ? 'translate-x-5' : ''
+                      }`}
+                    />
+                  </button>
                 </div>
-                <div>
-                  <label className="text-xs text-[var(--text-secondary)] block mb-1">Model</label>
-                  <select
-                    value={model}
-                    onChange={e => setModel(e.target.value)}
-                    className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
-                               rounded text-xs text-[var(--text-primary)]
-                               outline-none focus:border-[var(--text-secondary)]"
-                  >
-                    {availableModels.map(m => (
-                      <option key={m.value} value={m.value}>{m.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-[var(--text-secondary)] block mb-1">API Key</label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={e => setApiKey(e.target.value)}
-                    placeholder="sk-... or sk-ant-..."
-                    className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
-                               rounded text-xs text-[var(--text-primary)] font-mono
-                               placeholder:text-[var(--text-tertiary)] outline-none
-                               focus:border-[var(--text-secondary)]"
-                  />
-                </div>
+
+                {useOpenRouter ? (
+                  <>
+                    {/* OpenRouter Model Selection */}
+                    <div>
+                      <label className="text-xs text-[var(--text-secondary)] block mb-1">Model</label>
+                      <select
+                        value={openRouterModel}
+                        onChange={e => setOpenRouterModel(e.target.value)}
+                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                   rounded text-xs text-[var(--text-primary)]
+                                   outline-none focus:border-[var(--text-secondary)]"
+                      >
+                        <optgroup label="Anthropic (Claude)">
+                          {OPENROUTER_MODELS.filter(m => m.provider === 'anthropic').map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="OpenAI (GPT)">
+                          {OPENROUTER_MODELS.filter(m => m.provider === 'openai' && m.value.startsWith('openai/')).map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Google (Gemini)">
+                          {OPENROUTER_MODELS.filter(m => m.provider === 'google').map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Other">
+                          {OPENROUTER_MODELS.filter(m => !m.value.startsWith('anthropic/') && !m.value.startsWith('openai/') && !m.value.startsWith('google/')).map(m => (
+                            <option key={m.value} value={m.value}>{m.label}</option>
+                          ))}
+                        </optgroup>
+                      </select>
+                    </div>
+                    {/* OpenRouter API Key */}
+                    <div>
+                      <label className="text-xs text-[var(--text-secondary)] block mb-1">OpenRouter API Key</label>
+                      <input
+                        type="password"
+                        value={openRouterApiKey}
+                        onChange={e => setOpenRouterApiKey(e.target.value)}
+                        placeholder="sk-or-v1-..."
+                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                   rounded text-xs text-[var(--text-primary)] font-mono
+                                   placeholder:text-[var(--text-tertiary)] outline-none
+                                   focus:border-[var(--text-secondary)]"
+                      />
+                    </div>
+                    <p className="text-xs text-[var(--text-tertiary)] italic">
+                      One API key for all providers
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    {/* Direct Provider Settings */}
+                    <div>
+                      <label className="text-xs text-[var(--text-secondary)] block mb-1">Provider</label>
+                      <select
+                        value={aiVendor}
+                        onChange={e => setAiVendor(e.target.value)}
+                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                   rounded text-xs text-[var(--text-primary)]
+                                   outline-none focus:border-[var(--text-secondary)]"
+                      >
+                        {AI_VENDORS.map(v => (
+                          <option key={v.value} value={v.value}>{v.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-[var(--text-secondary)] block mb-1">Model</label>
+                      <select
+                        value={model}
+                        onChange={e => setModel(e.target.value)}
+                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                   rounded text-xs text-[var(--text-primary)]
+                                   outline-none focus:border-[var(--text-secondary)]"
+                      >
+                        {availableModels.map(m => (
+                          <option key={m.value} value={m.value}>{m.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-[var(--text-secondary)] block mb-1">API Key</label>
+                      <input
+                        type="password"
+                        value={apiKey}
+                        onChange={e => setApiKey(e.target.value)}
+                        placeholder="sk-... or sk-ant-..."
+                        className="w-full px-2 py-1 bg-[var(--bg-medium)] border border-[var(--border)]
+                                   rounded text-xs text-[var(--text-primary)] font-mono
+                                   placeholder:text-[var(--text-tertiary)] outline-none
+                                   focus:border-[var(--text-secondary)]"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

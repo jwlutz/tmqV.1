@@ -6,6 +6,7 @@ import { APIBacktestResult } from '../context';
 export interface UseChatOptions {
   apiKey: string;
   model: string;
+  useOpenRouter?: boolean;
   onBacktestResult?: (result: APIBacktestResult) => void;
   onCustomCode?: (code: string) => void;
 }
@@ -29,7 +30,7 @@ const WELCOME_MESSAGE: Message = {
   timestamp: new Date(),
 };
 
-export function useChat({ apiKey, model, onBacktestResult, onCustomCode }: UseChatOptions): UseChatReturn {
+export function useChat({ apiKey, model, useOpenRouter = false, onBacktestResult, onCustomCode }: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [isTyping, setIsTyping] = useState(false);
   const historyRef = useRef<Array<{ role: string; content: string }>>([]);
@@ -75,7 +76,7 @@ export function useChat({ apiKey, model, onBacktestResult, onCustomCode }: UseCh
     }]);
 
     try {
-      for await (const event of streamChat(historyRef.current, apiKey, model)) {
+      for await (const event of streamChat(historyRef.current, apiKey, model, useOpenRouter)) {
         switch (event.type) {
           case 'text':
             if (event.content) {
@@ -148,7 +149,7 @@ export function useChat({ apiKey, model, onBacktestResult, onCustomCode }: UseCh
     } finally {
       setIsTyping(false);
     }
-  }, [apiKey, model]);
+  }, [apiKey, model, useOpenRouter]);
 
   const clearMessages = useCallback(() => {
     setMessages([WELCOME_MESSAGE]);

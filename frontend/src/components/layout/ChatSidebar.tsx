@@ -6,7 +6,14 @@ import { ChatMessage, ChatInput, QuickActions, TypingIndicator } from '../chat';
 export function ChatSidebar() {
   const { mode } = useMode();
   const { setBacktestResult } = useBacktest();
-  const { apiKey, model } = useChatSettings();
+  const {
+    apiKey, model,
+    useOpenRouter, openRouterApiKey, openRouterModel
+  } = useChatSettings();
+
+  // Compute effective API key and model based on OpenRouter mode
+  const effectiveApiKey = useOpenRouter ? openRouterApiKey : apiKey;
+  const effectiveModel = useOpenRouter ? openRouterModel : model;
   const { setCodePanelOpen, setSandboxCode } = useCodePanel();
   const [isOpen, setIsOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -17,8 +24,9 @@ export function ChatSidebar() {
   }, [setSandboxCode, setCodePanelOpen]);
 
   const { messages, isTyping, sendMessage } = useChat({
-    apiKey,
-    model,
+    apiKey: effectiveApiKey,
+    model: effectiveModel,
+    useOpenRouter,
     onBacktestResult: setBacktestResult,
     onCustomCode: handleCustomCode,
   });

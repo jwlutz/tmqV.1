@@ -21,5 +21,6 @@
 - stress-test through 2008, 2020, 2022
 - walk forward and monte carlo, multi-fold val
 - "improve this strategy with AI"
+- add alternate data sources like SEC scraping
 
 

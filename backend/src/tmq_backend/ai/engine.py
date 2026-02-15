@@ -9,8 +9,11 @@ from tmq_core.data import fetch_ohlcv
 from tmq_core.indicators import get_indicator
 from tmq_core.sandbox import execute_analysis, execute_custom_strategy
 
-from .prompt import SYSTEM_PROMPT
+from .prompts import build_prompt, get_provider_from_model, build_environment
 from .tools import TOOLS
+
+# OpenRouter base URL
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 def execute_tool(name: str, args: dict) -> str:
@@ -87,9 +90,21 @@ def _sse(event: dict) -> str:
     return f"data: {json.dumps(event)}\n\n"
 
 
-async def chat_stream(messages: list, api_key: str, model: str = "gpt-4o-mini"):
+async def chat_stream(
+    messages: list,
+    api_key: str,
+    model: str = "gpt-4o-mini",
+    use_openrouter: bool = False,
+):
     """
     Agentic chat loop with tool calling.
+
+    Supports multiple AI providers with provider-specific prompts:
+    - Anthropic (Claude): XML-formatted prompts
+    - OpenAI (GPT): Markdown-formatted prompts
+    - Google (Gemini): Concise prompts
+
+    When use_openrouter=True, routes through OpenRouter API for unified access.
 
     Yields SSE-formatted strings:
       data: {"type": "text", "content": "..."}
@@ -97,17 +112,39 @@ async def chat_stream(messages: list, api_key: str, model: str = "gpt-4o-mini"):
       data: {"type": "tool_result", "name": "...", "result": "..."}
       data: {"type": "done"}
     """
-    full_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+    # Build runtime environment context
+    env = build_environment()
+
+    # Detect provider from model name and build appropriate prompt
+    provider = get_provider_from_model(model)
+    system_prompt = build_prompt(provider, env)
+
+    full_messages = [{"role": "system", "content": system_prompt}] + messages
+
+    # Configure litellm for OpenRouter if requested
+    completion_kwargs = {
+        "model": model,
+        "messages": full_messages,
+        "tools": TOOLS,
+        "stream": True,
+        "api_key": api_key,
+    }
+
+    if use_openrouter:
+        # Route through OpenRouter
+        completion_kwargs["api_base"] = OPENROUTER_BASE_URL
+        # OpenRouter models already include provider prefix (e.g., "anthropic/claude-sonnet-4")
+        # Add OpenRouter-specific headers
+        completion_kwargs["extra_headers"] = {
+            "HTTP-Referer": "https://thats-my-quant.dev",
+            "X-Title": "thats_my_quant",
+        }
 
     max_iterations = 10
     for _ in range(max_iterations):
-        response = litellm.completion(
-            model=model,
-            messages=full_messages,
-            tools=TOOLS,
-            stream=True,
-            api_key=api_key,
-        )
+        # Update messages for each iteration (they grow with tool results)
+        completion_kwargs["messages"] = full_messages
+        response = litellm.completion(**completion_kwargs)
 
         # Collect all streamed chunks, then use stream_chunk_builder
         # to properly reconstruct the full response including tool calls.

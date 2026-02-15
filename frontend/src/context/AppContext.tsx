@@ -81,6 +81,13 @@ interface AppContextValue {
   setModel: (model: string) => void;
   aiVendor: string;
   setAiVendor: (vendor: string) => void;
+  // OpenRouter settings
+  useOpenRouter: boolean;
+  setUseOpenRouter: (use: boolean) => void;
+  openRouterApiKey: string;
+  setOpenRouterApiKey: (key: string) => void;
+  openRouterModel: string;
+  setOpenRouterModel: (model: string) => void;
   // Data settings
   cryptoExchange: string;
   setCryptoExchange: (exchange: string) => void;
@@ -118,6 +125,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('gpt-4o-mini');
   const [aiVendor, setAiVendor] = useState('openai');
+  // OpenRouter settings
+  const [useOpenRouter, setUseOpenRouter] = useState(false);
+  const [openRouterApiKey, setOpenRouterApiKey] = useState('');
+  const [openRouterModel, setOpenRouterModel] = useState('anthropic/claude-haiku-4.5');
   // Data settings
   const [cryptoExchange, setCryptoExchange] = useState('coinbase');
   const [equitySource, setEquitySource] = useState('yfinance');
@@ -238,6 +249,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       apiKey, setApiKey,
       model, setModel,
       aiVendor, setAiVendor,
+      useOpenRouter, setUseOpenRouter,
+      openRouterApiKey, setOpenRouterApiKey,
+      openRouterModel, setOpenRouterModel,
       cryptoExchange, setCryptoExchange,
       equitySource, setEquitySource,
       providerCredentials, setProviderCredential,
@@ -288,8 +302,16 @@ export function useBacktest() {
 }
 
 export function useChatSettings() {
-  const { apiKey, setApiKey, model, setModel, aiVendor, setAiVendor } = useAppContext();
-  return { apiKey, setApiKey, model, setModel, aiVendor, setAiVendor };
+  const {
+    apiKey, setApiKey, model, setModel, aiVendor, setAiVendor,
+    useOpenRouter, setUseOpenRouter, openRouterApiKey, setOpenRouterApiKey,
+    openRouterModel, setOpenRouterModel
+  } = useAppContext();
+  return {
+    apiKey, setApiKey, model, setModel, aiVendor, setAiVendor,
+    useOpenRouter, setUseOpenRouter, openRouterApiKey, setOpenRouterApiKey,
+    openRouterModel, setOpenRouterModel
+  };
 }
 
 export function useDataSettings() {

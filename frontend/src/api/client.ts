@@ -195,15 +195,28 @@ export interface ChatSSEEvent {
   result?: string;
 }
 
+export interface ChatOptions {
+  messages: Array<{ role: string; content: string }>;
+  apiKey: string;
+  model: string;
+  useOpenRouter?: boolean;
+}
+
 export async function* streamChat(
   messages: Array<{ role: string; content: string }>,
   apiKey: string,
-  model: string = "gpt-4o-mini"
+  model: string = "gpt-4o-mini",
+  useOpenRouter: boolean = false
 ): AsyncGenerator<ChatSSEEvent> {
   const res = await fetch(`${BASE_URL}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages, api_key: apiKey, model }),
+    body: JSON.stringify({
+      messages,
+      api_key: apiKey,
+      model,
+      use_openrouter: useOpenRouter,
+    }),
   });
 
   if (!res.ok) {
