@@ -1,3 +1,4 @@
+export { useLocalStorage } from './useLocalStorage'
 export { useMarketData, isCryptoSymbol } from './useMarketData'
 export { useChat } from './useChat'
 export { useIndicators, AVAILABLE_INDICATORS } from './useIndicators'

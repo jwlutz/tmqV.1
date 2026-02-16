@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react';
 import { fetchConfig, ServerConfig } from '../api/client';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 type Mode = 'live' | 'backtest';
 
@@ -143,20 +144,20 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<Mode>('live');
-  const [symbol, setSymbolState] = useState(DEFAULT_SYMBOL);
-  const [interval, setIntervalState] = useState('1d');
+  const [symbol, setSymbolState] = useLocalStorage('symbol', DEFAULT_SYMBOL);
+  const [interval, setIntervalState] = useLocalStorage('interval', '1d');
   const [backtestResult, setBacktestResult] = useState<APIBacktestResult | null>(null);
-  // AI settings
+  // AI settings (model/vendor persisted, API keys NOT persisted for security)
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('gpt-4o-mini');
-  const [aiVendor, setAiVendor] = useState('openai');
+  const [model, setModel] = useLocalStorage('model', 'gpt-4o-mini');
+  const [aiVendor, setAiVendor] = useLocalStorage('aiVendor', 'openai');
   // OpenRouter settings
-  const [useOpenRouter, setUseOpenRouter] = useState(false);
+  const [useOpenRouter, setUseOpenRouter] = useLocalStorage('useOpenRouter', false);
   const [openRouterApiKey, setOpenRouterApiKey] = useState('');
-  const [openRouterModel, setOpenRouterModel] = useState('anthropic/claude-haiku-4.5');
-  // Server config
+  const [openRouterModel, setOpenRouterModel] = useLocalStorage('openRouterModel', 'anthropic/claude-haiku-4.5');
+  // Server config (config fetched from server, selection persisted)
   const [serverConfig, setServerConfig] = useState<ServerConfig>({ providers: {} });
-  const [selectedServerProvider, setSelectedServerProvider] = useState<string | null>(null);
+  const [selectedServerProvider, setSelectedServerProvider] = useLocalStorage<string | null>('selectedServerProvider', null);
 
   // Fetch server config on mount
   useEffect(() => {
@@ -171,13 +172,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     });
   }, []);
-  // Data settings
-  const [cryptoExchange, setCryptoExchange] = useState('coinbase');
-  const [equitySource, setEquitySource] = useState('yfinance');
+  // Data settings (persisted)
+  const [cryptoExchange, setCryptoExchange] = useLocalStorage('cryptoExchange', 'coinbase');
+  const [equitySource, setEquitySource] = useLocalStorage('equitySource', 'yfinance');
   // Provider credentials
   const [providerCredentials, setProviderCredentials] = useState<ProviderCredentials>({});
-  // Multi-chart layout
-  const [layout, setLayoutState] = useState<ChartLayout>('1x1');
+  // Multi-chart layout (persisted)
+  const [layout, setLayoutState] = useLocalStorage<ChartLayout>('layout', '1x1');
   const [panes, setPanes] = useState<ChartPaneState[]>([createPane('pane-1', DEFAULT_SYMBOL)]);
   const [activePaneId, setActivePaneIdState] = useState('pane-1');
   // Refs for reading current state without stale closures
@@ -185,8 +186,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   panesRef.current = panes;
   const activePaneIdRef = useRef(activePaneId);
   activePaneIdRef.current = activePaneId;
-  // Code panel
-  const [codePanelOpen, setCodePanelOpen] = useState(true);
+  // Code panel (persisted)
+  const [codePanelOpen, setCodePanelOpen] = useLocalStorage('codePanelOpen', true);
   const [sandboxCode, setSandboxCode] = useState('');
   // FRED macro data
   const [fredApiKey, setFredApiKey] = useState('');
