@@ -97,14 +97,57 @@ class FREDProvider:
         merged = merged.reset_index()
         return merged
 
+    def _search_via_api(self, query: str, limit: int = 20) -> list[dict]:
+        """Direct FRED API search, bypassing fredapi's buggy date parser."""
+        import requests
+        url = "https://api.stlouisfed.org/fred/series/search"
+        params = {
+            "search_text": query,
+            "api_key": self.fred.api_key,
+            "file_type": "json",
+            "limit": limit,
+            "order_by": "popularity",
+            "sort_order": "desc",
+        }
+        resp = requests.get(url, params=params, timeout=15)
+        resp.raise_for_status()
+        serieses = resp.json().get("seriess", [])
+        return [
+            {
+                "id": s.get("id", ""),
+                "title": s.get("title", ""),
+                "frequency": s.get("frequency_short", s.get("frequency", "")),
+                "units": s.get("units", ""),
+                "seasonal_adjustment": s.get("seasonal_adjustment_short", s.get("seasonal_adjustment", "")),
+                "last_updated": s.get("last_updated", ""),
+            }
+            for s in serieses[:limit]
+        ]
+
     def search_series(self, query: str, limit: int = 20) -> list[dict]:
         """Search FRED for series by keyword.
 
         Returns:
             [{id, title, frequency, units, seasonal_adjustment, last_updated}, ...]
         """
-        results = self.fred.search(query)
-        if results is None or results.empty:
+        try:
+            results = self.fred.search(query)
+        except (OverflowError, Exception) as e:
+            # fredapi can fail parsing ancient dates (e.g. 1209 AD) that overflow
+            # pandas nanosecond timestamps. Fall back to direct API call.
+            err_str = f"{type(e).__name__}: {e}"
+            if "overflow" in err_str.lower() or "outofbounds" in err_str.lower():
+                results = self._search_via_api(query, limit)
+            else:
+                raise
+        if results is None:
+            return []
+
+        # _search_via_api returns a list directly
+        if isinstance(results, list):
+            return results
+
+        if isinstance(results, pd.DataFrame) and results.empty:
             return []
 
         out = []

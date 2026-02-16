@@ -214,8 +214,8 @@ class SettingsUpdateRequest(BaseModel):
 
 class TestConnectionRequest(BaseModel):
     """Request model for testing a provider connection."""
-    provider: str
-    credentials: dict[str, str]
+    credentials: dict[str, str] = {}
+    use_saved: bool = False  # If true, use saved credentials from .env
 
 
 @router.get("")
@@ -305,11 +305,23 @@ async def test_connection(provider: str, request: TestConnectionRequest) -> dict
 
     meta = PROVIDER_METADATA[provider]
 
+    # Get credentials - use saved ones if requested or if none provided
+    credentials = request.credentials
+    if request.use_saved or not any(credentials.values()):
+        # Load from .env
+        env_path = get_env_path()
+        saved = parse_env_file(env_path)
+        # Merge: provided credentials override saved
+        merged = {}
+        for key in meta.get("keys", []):
+            merged[key] = credentials.get(key) or saved.get(key, "")
+        credentials = merged
+
     try:
         if provider == "alpaca":
             from alpaca.data import StockHistoricalDataClient
-            api_key = request.credentials.get("ALPACA_API_KEY", "")
-            secret_key = request.credentials.get("ALPACA_SECRET_KEY", "")
+            api_key = credentials.get("ALPACA_API_KEY", "")
+            secret_key = credentials.get("ALPACA_SECRET_KEY", "")
             if not api_key or not secret_key:
                 return {"status": "error", "message": "API key and secret required"}
             client = StockHistoricalDataClient(api_key, secret_key)
@@ -328,7 +340,7 @@ async def test_connection(provider: str, request: TestConnectionRequest) -> dict
 
         elif provider == "fred":
             from fredapi import Fred
-            api_key = request.credentials.get("FRED_API_KEY", "")
+            api_key = credentials.get("FRED_API_KEY", "")
             if not api_key:
                 return {"status": "error", "message": "API key required"}
             fred = Fred(api_key=api_key)
@@ -338,7 +350,7 @@ async def test_connection(provider: str, request: TestConnectionRequest) -> dict
 
         elif provider == "polygon":
             import httpx
-            api_key = request.credentials.get("POLYGON_API_KEY", "")
+            api_key = credentials.get("POLYGON_API_KEY", "")
             if not api_key:
                 return {"status": "error", "message": "API key required"}
             async with httpx.AsyncClient() as client:
@@ -356,7 +368,7 @@ async def test_connection(provider: str, request: TestConnectionRequest) -> dict
         elif provider in ["anthropic", "openai", "google", "xai", "openrouter"]:
             # For AI providers, just validate key format
             key_name = meta["keys"][0]
-            api_key = request.credentials.get(key_name, "")
+            api_key = credentials.get(key_name, "")
             if not api_key:
                 return {"status": "error", "message": "API key required"}
             # Basic format validation

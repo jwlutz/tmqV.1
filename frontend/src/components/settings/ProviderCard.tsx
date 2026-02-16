@@ -6,7 +6,7 @@ interface ProviderCardProps {
   provider: ProviderInfo
   settings: Record<string, string>
   onUpdate: (updates: Record<string, string>) => Promise<void>
-  onTestConnection: (provider: string, credentials: Record<string, string>) => Promise<{ status: string; message: string }>
+  onTestConnection: (provider: string, credentials: Record<string, string>, useSaved?: boolean) => Promise<{ status: string; message: string }>
 }
 
 export function ProviderCard({ id, provider, settings, onUpdate, onTestConnection }: ProviderCardProps) {
@@ -55,7 +55,9 @@ export function ProviderCard({ id, provider, settings, onUpdate, onTestConnectio
     setIsTesting(true)
     setTestResult(null)
     try {
-      const result = await onTestConnection(id, localValues)
+      // Use saved credentials if no new values entered
+      const hasNewValues = provider.keys.some(k => localValues[k])
+      const result = await onTestConnection(id, localValues, !hasNewValues)
       setTestResult(result)
     } catch {
       // Error handled by hook
@@ -178,10 +180,10 @@ export function ProviderCard({ id, provider, settings, onUpdate, onTestConnectio
               <div className="flex items-center gap-3 pt-2">
                 <button
                   onClick={handleTest}
-                  disabled={isTesting || !provider.keys.some(k => localValues[k])}
+                  disabled={isTesting || (provider.keys.length > 0 && !provider.keys.some(k => localValues[k]) && provider.status !== 'connected')}
                   className="px-4 py-2 bg-white/5 border border-[var(--border)] rounded-lg text-sm font-medium text-[var(--text-primary)] hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  {isTesting ? 'Testing...' : 'Test Connection'}
+                  {isTesting ? 'Testing...' : provider.keys.some(k => localValues[k]) ? 'Test Connection' : 'Re-test Saved Key'}
                 </button>
                 <button
                   onClick={handleSave}

@@ -102,13 +102,14 @@ export function useSettings() {
 
   const testConnection = useCallback(async (
     provider: string,
-    credentials: Record<string, string>
+    credentials: Record<string, string>,
+    useSaved: boolean = false
   ): Promise<TestConnectionResult> => {
     try {
       const res = await fetch(`${BASE_URL}/api/settings/test/${provider}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, credentials })
+        body: JSON.stringify({ credentials, use_saved: useSaved })
       })
       const data = await res.json()
       if (data.status === 'ok') {

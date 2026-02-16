@@ -15,6 +15,7 @@
 - add feedback section in settings to request feature/report bug
 - see backtest verification (visuals with entries and exits on chart, as well as equity curve, compute alphaworks' metrics)
 - better strategy for overlay normalization
+- default to best available data
 
 **Secondary**
 - allow AI to make custom indicators

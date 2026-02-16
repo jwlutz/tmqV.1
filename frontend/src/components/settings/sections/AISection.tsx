@@ -23,9 +23,38 @@ const OPENROUTER_MODELS = [
   { value: 'mistralai/mistral-large-2512', label: 'Mistral Large', group: 'Other' },
 ]
 
+// Models for direct provider access
+const PROVIDER_MODELS: Record<string, { value: string; label: string }[]> = {
+  anthropic: [
+    { value: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+    { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5' },
+    { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5' },
+  ],
+  openai: [
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+    { value: 'gpt-4.1', label: 'GPT-4.1' },
+    { value: 'o3', label: 'o3' },
+    { value: 'o3-mini', label: 'o3-mini' },
+  ],
+  google: [
+    { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro' },
+    { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+  ],
+  xai: [
+    { value: 'grok-4', label: 'Grok 4' },
+    { value: 'grok-4.1-fast', label: 'Grok 4.1 Fast' },
+    { value: 'grok-code-fast-1', label: 'Grok Code Fast' },
+  ],
+}
+
 export function AISection({ providers, settings, onUpdate, onTestConnection }: AISectionProps) {
   const [useOpenRouter, setUseOpenRouter] = useState(settings['USE_OPENROUTER'] === 'true')
   const [selectedModel, setSelectedModel] = useState(settings['OPENROUTER_MODEL'] || 'anthropic/claude-haiku-4.5')
+  const [selectedProvider, setSelectedProvider] = useState(settings['AI_PROVIDER'] || 'anthropic')
+  const [directModel, setDirectModel] = useState(settings['AI_MODEL'] || 'claude-sonnet-4-5-20250929')
 
   const aiProviders = AI_PROVIDER_ORDER
     .map(id => ({ id, provider: providers[id] }))
@@ -39,6 +68,20 @@ export function AISection({ providers, settings, onUpdate, onTestConnection }: A
   const handleModelChange = async (model: string) => {
     setSelectedModel(model)
     await onUpdate({ OPENROUTER_MODEL: model })
+  }
+
+  const handleProviderChange = async (provider: string) => {
+    setSelectedProvider(provider)
+    // Set default model for this provider
+    const models = PROVIDER_MODELS[provider]
+    const defaultModel = models?.[0]?.value || ''
+    setDirectModel(defaultModel)
+    await onUpdate({ AI_PROVIDER: provider, AI_MODEL: defaultModel })
+  }
+
+  const handleDirectModelChange = async (model: string) => {
+    setDirectModel(model)
+    await onUpdate({ AI_MODEL: model })
   }
 
   // Get configured providers for model filtering
@@ -108,13 +151,57 @@ export function AISection({ providers, settings, onUpdate, onTestConnection }: A
       {/* Direct Provider Keys */}
       {!useOpenRouter && (
         <div className="space-y-4">
+          {/* Provider and Model Selection */}
+          <div className="p-4 bg-[var(--bg-dark)] rounded-lg border border-[var(--border)] space-y-4">
+            <h3 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">
+              Default Provider & Model
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-[var(--text-secondary)] block mb-2">
+                  Provider
+                </label>
+                <select
+                  value={selectedProvider}
+                  onChange={e => handleProviderChange(e.target.value)}
+                  className="w-full px-3 py-2 bg-[var(--bg-medium)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-secondary)]"
+                >
+                  {aiProviders
+                    .filter(({ id }) => id !== 'openrouter')
+                    .map(({ id, provider }) => (
+                      <option key={id} value={id}>
+                        {provider.name} {provider.status === 'connected' ? '✓' : ''}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-[var(--text-secondary)] block mb-2">
+                  Model
+                </label>
+                <select
+                  value={directModel}
+                  onChange={e => handleDirectModelChange(e.target.value)}
+                  className="w-full px-3 py-2 bg-[var(--bg-medium)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)] outline-none focus:border-[var(--text-secondary)]"
+                >
+                  {(PROVIDER_MODELS[selectedProvider] || []).map(m => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Provider Cards */}
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-[var(--text-secondary)] uppercase tracking-wider">
-              Direct Provider Keys
+              API Keys
             </h3>
             {configuredProviders.length > 0 && (
               <span className="text-xs text-[var(--green-up)]">
-                {configuredProviders.length} configured
+                {configuredProviders.filter(p => p !== 'openrouter').length} configured
               </span>
             )}
           </div>
@@ -137,11 +224,17 @@ export function AISection({ providers, settings, onUpdate, onTestConnection }: A
       )}
 
       {/* Info */}
-      <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-        <p className="text-sm text-blue-300">
-          <strong>Tip:</strong> OpenRouter provides unified access to multiple AI providers with a single API key.
-          Direct keys give you more control and may be faster for specific providers.
-        </p>
+      <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-start gap-3">
+        <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+          <p className="text-sm font-medium text-blue-400">Tip</p>
+          <p className="text-sm text-blue-300/80 mt-1">
+            OpenRouter provides unified access to multiple AI providers with a single API key.
+            Direct keys give you more control and may be faster for specific providers.
+          </p>
+        </div>
       </div>
     </div>
   )
