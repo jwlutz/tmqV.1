@@ -1,3 +1,13 @@
+**sammy todos**
+- indicators (see if tradingview package has them for free)
+- fix normalization of charts
+- audit backtest results and give feedback/improve prompts/tools
+
+**lutz todos**
+- spec out macro page
+- cookies to save state of charts
+- db schema & auth
+
 **Far Future**
 - code module needs .sss support
 - backtester switch to alphaworks
@@ -16,6 +26,7 @@
 - see backtest verification (visuals with entries and exits on chart, as well as equity curve, compute alphaworks' metrics)
 - better strategy for overlay normalization
 - default to best available data
+- cookies for state
 
 **Secondary**
 - allow AI to make custom indicators
