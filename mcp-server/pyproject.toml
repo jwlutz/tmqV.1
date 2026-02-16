@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "tmq-mcp"
 version = "0.1.0"
@@ -5,11 +9,11 @@ requires-python = ">=3.10"
 dependencies = [
     "fastmcp",
     "tmq-core",
-    "pandas",
+    "pandas<2.1",
 ]
 
 [project.scripts]
 tmq-mcp = "tmq_mcp.server:main"
 
-[tool.setuptools]
-# Ensure tmq-core is installed: pip install -e ../core
+[tool.setuptools.packages.find]
+where = ["src"]

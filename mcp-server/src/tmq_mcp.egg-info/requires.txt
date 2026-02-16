@@ -1,3 +1,0 @@
-fastmcp
-tmq-core
-pandas

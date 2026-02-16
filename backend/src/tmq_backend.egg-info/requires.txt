@@ -1,9 +1,0 @@
-tmq-core
-fastapi
-uvicorn[standard]
-litellm
-pydantic
-
-[dev]
-pytest
-httpx

@@ -1,7 +1,0 @@
-Metadata-Version: 2.4
-Name: tmq-mcp
-Version: 0.1.0
-Requires-Python: >=3.10
-Requires-Dist: fastmcp
-Requires-Dist: tmq-core
-Requires-Dist: pandas

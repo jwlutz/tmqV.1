@@ -1,2 +1,0 @@
-[console_scripts]
-tmq = tmq_backend.cli:run

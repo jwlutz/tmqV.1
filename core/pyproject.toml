@@ -13,7 +13,7 @@ dependencies = [
     "pandas<2.1",
     "numpy>=1.18,<1.24",
     "pydantic",
-    "pandas-ta-classic==0.3.54",
+    "ta",
     "vectorbt==0.28.1",
     "fastapi",
     "uvicorn[standard]",

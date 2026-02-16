@@ -10,7 +10,6 @@ from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
-
 class DataProvider(Protocol):
     def fetch_ohlcv(self, symbol: str, interval: str, start: str, end: str) -> pd.DataFrame:
         """Returns DataFrame with columns: date, open, high, low, close, volume"""
@@ -32,7 +31,6 @@ class YFinanceProvider:
         df = df.dropna().reset_index(drop=True)
         df = df.sort_values("date").reset_index(drop=True)
         return df
-
 
 class CCXTProvider:
     def __init__(self, exchange_id: str = "coinbase"):

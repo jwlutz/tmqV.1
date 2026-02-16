@@ -5,9 +5,15 @@ A crypto and equities charting platform with AI-assisted backtesting.
 ## Quick Start
 
 ```bash
+# 0. (Optionally) Initiate a venv in python 3.11
+py -3.11 -m venv .venv
+.\.venv\Scripts\activate
+python -m pip install -U pip
+
 # 1. Install dependencies
-cd core && pip install -e . && cd ..
-cd backend && pip install -e . && cd ..
+pip install -e .\core
+pip install -e ".\backend[dev]"
+pip install -e .\mcp-server
 cd frontend && npm install && cd ..
 
 # 2. Configure API keys (optional but recommended)
