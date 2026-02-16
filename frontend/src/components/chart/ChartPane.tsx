@@ -1,19 +1,13 @@
-import { useEffect, useRef, useMemo, useState } from 'react'
-import { createChart, CandlestickSeries, HistogramSeries, LineSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp } from 'lightweight-charts'
-import { useMarketData } from '../../hooks'
-import { useIndicators, IndicatorData } from '../../hooks/useIndicators'
-import { useMarketStats } from '../../hooks/useMarketStats'
-import { useDataSettings } from '../../context'
-import { LoadingOverlay } from '../ui'
+import { useState, useRef, useEffect, useCallback, Suspense } from 'react'
 import { IndicatorsDropdown } from './IndicatorsDropdown'
-import { MacroDropdown } from './MacroDropdown'
 import { PaneIntervalSelector } from './PaneIntervalSelector'
 import { TickerDropdown } from './TickerDropdown'
 import { LayoutSelector } from './LayoutSelector'
 import { CompareDropdown } from './CompareDropdown'
-import { formatPrice, formatNumber } from '../../hooks/useMarketStats'
-import { fetchOHLCV } from '../../api/client'
-import type { ChartLayout, MacroOverlay } from '../../context'
+import { getWidgetComponent, WIDGET_REGISTRY } from '../../widgets'
+import type { WidgetType, WidgetDefinition } from '../../widgets'
+import type { ChartLayout } from '../../context'
+import type { CandlestickIndicatorInfo } from '../../widgets/CandlestickWidget'
 
 interface ChartPaneProps {
   paneId: string;
@@ -26,665 +20,85 @@ interface ChartPaneProps {
   showLayoutSelector?: boolean;
   layoutValue?: ChartLayout;
   onLayoutChange?: (layout: ChartLayout) => void;
-  macroOverlays?: MacroOverlay[];
-  onAddMacroOverlay?: (overlay: MacroOverlay) => void;
-  onRemoveMacroOverlay?: (overlayId: string) => void;
+  widgetType: WidgetType;
+  onWidgetTypeChange: (type: WidgetType) => void;
 }
 
-export function ChartPane({ paneId, symbol, interval, isActive, onActivate, onSymbolChange, onIntervalChange, showLayoutSelector, layoutValue, onLayoutChange, macroOverlays = [], onAddMacroOverlay, onRemoveMacroOverlay }: ChartPaneProps) {
-  const { candles, status, isCrypto, loadMoreHistory, isLoadingMore } = useMarketData(symbol, interval)
-  const { stats: marketStats } = useMarketStats(symbol)
-  const { providerCredentials } = useDataSettings()
-  const containerRef = useRef<HTMLDivElement>(null)
-  const chartRef = useRef<IChartApi | null>(null)
-  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
-  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
-  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
-  const compareSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
-  const macroSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
-  const lastCandleCountRef = useRef(0)
-  const earliestTimeRef = useRef<number | null>(null)
-  const lastTimeRef = useRef<number | null>(null)
-  const isResettingRef = useRef(false)
-  const chartDisposedRef = useRef(false)
+// Group widget types by category for dropdown
+const WIDGET_CATEGORIES = ['Charts', 'Macro', 'Fundamentals', 'Sentiment'] as const
+function getGroupedWidgets() {
+  const groups: Record<string, WidgetDefinition[]> = {}
+  for (const cat of WIDGET_CATEGORIES) groups[cat] = []
+  for (const def of Object.values(WIDGET_REGISTRY)) {
+    groups[def.category]?.push(def)
+  }
+  return groups
+}
+const GROUPED_WIDGETS = getGroupedWidgets()
 
-  // Comparison symbol state - stores percent change data for both main and compare
+export function ChartPane({
+  paneId, symbol, interval, isActive, onActivate,
+  onSymbolChange, onIntervalChange,
+  showLayoutSelector, layoutValue, onLayoutChange,
+  widgetType, onWidgetTypeChange,
+}: ChartPaneProps) {
+  const definition = WIDGET_REGISTRY[widgetType]
+  const [widgetMenuOpen, setWidgetMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // State bubbled up from CandlestickWidget via callbacks
+  const [chartStatus, setChartStatus] = useState('connecting')
   const [compareSymbol, setCompareSymbol] = useState<string | null>(null)
-  const [compareData, setCompareData] = useState<Array<{ time: UTCTimestamp; value: number }>>([])
-  const [mainPctData, setMainPctData] = useState<Array<{ time: UTCTimestamp; value: number }>>([])
-  const [, setCompareLoading] = useState(false)
-  const mainPctSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
 
-  // Show delayed data banner for equities without a live provider
-  const hasAlpaca = !!providerCredentials.alpaca?.apiKey
-  const showDelayedBanner = !isCrypto && !hasAlpaca
+  // Store indicator info in a ref to avoid infinite re-render loops.
+  // The ref always holds the latest info; we use a version counter
+  // to trigger re-renders only when selectedIds actually change.
+  const indicatorInfoRef = useRef<CandlestickIndicatorInfo | null>(null)
+  const [indicatorVersion, setIndicatorVersion] = useState(0)
+  const prevSelectedIdsKey = useRef('')
 
-  // Compute date range from candles for indicator fetching
-  const dateRange = useMemo(() => {
-    if (candles.length === 0) return { start: undefined, end: undefined }
-    const startDate = new Date(candles[0].time * 1000).toISOString().split('T')[0]
-    const endDate = new Date(candles[candles.length - 1].time * 1000).toISOString().split('T')[0]
-    return { start: startDate, end: endDate }
-  }, [candles.length > 0 ? candles[0].time : 0, candles.length > 0 ? candles[candles.length - 1].time : 0])
-
-  const {
-    selectedIds,
-    toggleIndicator,
-    activeIndicators,
-    availableIndicators,
-  } = useIndicators({
-    symbol,
-    interval,
-    startDate: dateRange.start,
-    endDate: dateRange.end,
-  })
-
-  // Get latest candle for stats display
-  const latestCandle = candles.length > 0 ? candles[candles.length - 1] : null
-
-  // Compute change from open using latest candle
-  const changeFromOpen = latestCandle ? latestCandle.close - latestCandle.open : null
-  const changePctFromOpen = latestCandle && latestCandle.open !== 0
-    ? ((latestCandle.close - latestCandle.open) / latestCandle.open) * 100
-    : null
-
-  // Reset chart tracking refs when symbol or interval changes
-  useEffect(() => {
-    lastCandleCountRef.current = 0
-    earliestTimeRef.current = null
-    lastTimeRef.current = null
-    isResettingRef.current = true
-
-    if (chartDisposedRef.current || !chartRef.current) return
-
-    if (candleSeriesRef.current) {
-      try { candleSeriesRef.current.setData([]) } catch { /* ignore */ }
-    }
-    if (volumeSeriesRef.current) {
-      try { volumeSeriesRef.current.setData([]) } catch { /* ignore */ }
-    }
-
-    const seriesToRemove: Array<{ id: string; series: ISeriesApi<'Line'> }> = []
-    indicatorSeriesRef.current.forEach((series, id) => {
-      seriesToRemove.push({ id, series })
-    })
-    indicatorSeriesRef.current.clear()
-
-    const chart = chartRef.current
-    for (const { series } of seriesToRemove) {
-      try {
-        if (chart && !chartDisposedRef.current) {
-          chart.removeSeries(series)
-        }
-      } catch { /* ignore */ }
-    }
-  }, [symbol, interval])
-
-  // Create chart on mount
-  useEffect(() => {
-    if (!containerRef.current) return
-
-    const chart = createChart(containerRef.current, {
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
-      layout: {
-        background: { color: '#0b0f19' },
-        textColor: '#e8ecf4',
-      },
-      grid: {
-        vertLines: { color: 'rgba(255,255,255,0.06)' },
-        horzLines: { color: 'rgba(255,255,255,0.06)' },
-      },
-      crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
-      leftPriceScale: {
-        visible: false,  // Hidden by default, shown when comparing
-        borderColor: 'rgba(59, 130, 246, 0.3)',
-      },
-      timeScale: {
-        borderColor: 'rgba(255,255,255,0.06)',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    })
-
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#22c55e',
-      downColor: '#ef4444',
-      borderUpColor: '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
-      lastValueVisible: false,
-      priceLineVisible: false,
-    })
-
-    const volumeSeries = chart.addSeries(HistogramSeries, {
-      priceFormat: { type: 'volume' },
-      priceScaleId: '',
-      lastValueVisible: false,
-    })
-
-    volumeSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.85, bottom: 0 },
-    })
-
-    chartRef.current = chart
-    candleSeriesRef.current = candleSeries
-    volumeSeriesRef.current = volumeSeries
-    chartDisposedRef.current = false
-
-    const ro = new ResizeObserver(() => {
-      if (containerRef.current && chartRef.current && !chartDisposedRef.current) {
-        chartRef.current.applyOptions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        })
-      }
-    })
-    ro.observe(containerRef.current)
-
-    return () => {
-      chartDisposedRef.current = true
-      ro.disconnect()
-      chart.remove()
+  const handleIndicatorsReady = useCallback((info: CandlestickIndicatorInfo) => {
+    indicatorInfoRef.current = info
+    const key = info.selectedIds.join(',') + '|' + (info.dateRange?.start || '') + '|' + (info.dateRange?.end || '')
+    if (key !== prevSelectedIdsKey.current) {
+      prevSelectedIdsKey.current = key
+      setIndicatorVersion(v => v + 1)
     }
   }, [])
 
-  // Update chart when candles change
+  // Read the ref — the version counter ensures this re-evaluates when needed
+  void indicatorVersion // ensure the variable is "used" so React tracks the dependency
+  const indicatorInfo = indicatorInfoRef.current
+
+  // Close widget menu on outside click
   useEffect(() => {
-    if (chartDisposedRef.current) return
-    if (!candleSeriesRef.current || !volumeSeriesRef.current || candles.length === 0) return
-
-    const currentEarliestTime = candles[0].time
-    const currentLatestTime = candles[candles.length - 1].time
-    const isPrepending = earliestTimeRef.current !== null && currentEarliestTime < earliestTimeRef.current
-
-    const isReset = isResettingRef.current ||
-      (lastTimeRef.current !== null && currentLatestTime < lastTimeRef.current) ||
-      Math.abs(candles.length - lastCandleCountRef.current) > 5
-
-    try {
-      if (isReset) {
-        const chartCandles = candles.map(c => ({
-          time: c.time as UTCTimestamp,
-          open: c.open, high: c.high, low: c.low, close: c.close,
-        }))
-        const chartVolume = candles.map(c => ({
-          time: c.time as UTCTimestamp,
-          value: c.volume ?? 0,
-          color: c.close >= c.open ? '#22c55e80' : '#ef444480',
-        }))
-
-        candleSeriesRef.current.setData(chartCandles)
-        volumeSeriesRef.current.setData(chartVolume)
-
-        if (!isPrepending) {
-          chartRef.current?.timeScale().fitContent()
-        }
-
-        lastCandleCountRef.current = candles.length
-        earliestTimeRef.current = currentEarliestTime
-        lastTimeRef.current = currentLatestTime
-        isResettingRef.current = false
-      } else {
-        const lastCandle = candles[candles.length - 1]
-        if (lastTimeRef.current === null || lastCandle.time >= lastTimeRef.current) {
-          candleSeriesRef.current.update({
-            time: lastCandle.time as UTCTimestamp,
-            open: lastCandle.open, high: lastCandle.high,
-            low: lastCandle.low, close: lastCandle.close,
-          })
-          volumeSeriesRef.current.update({
-            time: lastCandle.time as UTCTimestamp,
-            value: lastCandle.volume ?? 0,
-            color: lastCandle.close >= lastCandle.open ? '#22c55e80' : '#ef444480',
-          })
-          lastCandleCountRef.current = candles.length
-          lastTimeRef.current = lastCandle.time
-        }
-      }
-    } catch (e) {
-      console.warn('Chart update failed, will reset:', e)
-      isResettingRef.current = true
-    }
-  }, [candles])
-
-  // Update indicator series
-  useEffect(() => {
-    if (chartDisposedRef.current || !chartRef.current) return
-    const chart = chartRef.current
-
-    // Remove deselected
-    const idsToRemove: string[] = []
-    indicatorSeriesRef.current.forEach((_series, id) => {
-      const baseId = id.split('-bb_')[0]
-      if (!selectedIds.includes(baseId) && !selectedIds.includes(id)) {
-        idsToRemove.push(id)
-      }
-    })
-    for (const id of idsToRemove) {
-      const series = indicatorSeriesRef.current.get(id)
-      if (series && chart && !chartDisposedRef.current) {
-        try { chart.removeSeries(series) } catch { /* ignore */ }
-      }
-      indicatorSeriesRef.current.delete(id)
-    }
-
-    // Add/update active
-    activeIndicators.forEach((indicator: IndicatorData) => {
-      if (chartDisposedRef.current || !chart) return
-      const { config, points } = indicator
-      if (points.length === 0) return
-
-      if (config.name === 'bbands') {
-        updateBollingerSeries(indicator)
-        return
-      }
-
-      let series = indicatorSeriesRef.current.get(config.id)
-      if (!series) {
-        try {
-          series = chart.addSeries(LineSeries, {
-            color: config.color,
-            lineWidth: 1,
-            priceScaleId: config.pane === 'separate' ? config.id : 'right',
-            lastValueVisible: false,
-            priceLineVisible: false,
-            ...(config.bounds && {
-              autoscaleInfoProvider: () => ({
-                priceRange: { minValue: config.bounds!.min, maxValue: config.bounds!.max },
-              }),
-            }),
-          })
-          if (config.pane === 'separate') {
-            series.priceScale().applyOptions({
-              scaleMargins: { top: 0.8, bottom: 0.02 },
-            })
-          }
-          if (config.levels) {
-            config.levels.forEach(level => {
-              series!.createPriceLine({
-                price: level,
-                color: 'rgba(255, 255, 255, 0.3)',
-                lineWidth: 1,
-                lineStyle: 2,
-                axisLabelVisible: true,
-                title: '',
-              })
-            })
-          }
-          indicatorSeriesRef.current.set(config.id, series)
-        } catch (e) {
-          console.warn(`Failed to create indicator series for ${config.id}:`, e)
-          return
-        }
-      }
-
-      const valueKey = getValueKey(config.name)
-      const seriesData = points
-        .filter(p => p[valueKey] !== undefined && p[valueKey] !== null)
-        .map(p => ({
-          time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
-          value: Number(p[valueKey]),
-        }))
-        .sort((a, b) => a.time - b.time)
-        .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
-
-      if (seriesData.length > 0) {
-        try { series.setData(seriesData) } catch (e) {
-          console.warn(`Failed to set indicator data for ${config.id}:`, e)
-        }
-      }
-    })
-  }, [activeIndicators, selectedIds])
-
-  function getValueKey(indicatorName: string): string {
-    switch (indicatorName) {
-      case 'ema': return 'ema'
-      case 'sma': return 'sma'
-      case 'rsi': return 'rsi'
-      case 'macd': return 'macd'
-      case 'stoch': return 'stoch_k'
-      case 'atr': return 'atr'
-      case 'adx': return 'adx'
-      case 'vwap': return 'vwap'
-      case 'obv': return 'obv'
-      default: return 'value'
-    }
-  }
-
-  function updateBollingerSeries(indicator: IndicatorData) {
-    if (chartDisposedRef.current || !chartRef.current) return
-    const { config, points } = indicator
-    if (points.length === 0) return
-
-    const chart = chartRef.current
-    const bandKeys = ['bb_upper', 'bb_mid', 'bb_lower'] as const
-    const bandColors = [config.color, config.color + '80', config.color]
-
-    bandKeys.forEach((key, idx) => {
-      if (chartDisposedRef.current) return
-      const seriesId = `${config.id}-${key}`
-      let series = indicatorSeriesRef.current.get(seriesId)
-
-      if (!series) {
-        try {
-          series = chart.addSeries(LineSeries, {
-            color: bandColors[idx],
-            lineWidth: 1,
-            lineStyle: idx === 1 ? 2 : 0,
-            priceScaleId: 'right',
-            lastValueVisible: false,
-            priceLineVisible: false,
-          })
-          indicatorSeriesRef.current.set(seriesId, series)
-        } catch (e) {
-          console.warn(`Failed to create Bollinger band series:`, e)
-          return
-        }
-      }
-
-      const seriesData = points
-        .filter(p => p[key] !== undefined)
-        .map(p => ({
-          time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
-          value: Number(p[key]),
-        }))
-        .sort((a, b) => a.time - b.time)
-        .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
-
-      if (seriesData.length > 0) {
-        try { series.setData(seriesData) } catch (e) {
-          console.warn(`Failed to set Bollinger band data:`, e)
-        }
-      }
-    })
-  }
-
-  // Lazy load more history
-  useEffect(() => {
-    if (chartDisposedRef.current || !chartRef.current) return
-    const chart = chartRef.current
-    let timeScale: ReturnType<typeof chart.timeScale> | null = null
-    try { timeScale = chart.timeScale() } catch { return }
-
-    const handleVisibleRangeChange = (range: { from: number; to: number } | null) => {
-      if (!range || chartDisposedRef.current) return
-      if (range.from < 10 && !isLoadingMore) {
-        loadMoreHistory()
+    if (!widgetMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setWidgetMenuOpen(false)
       }
     }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [widgetMenuOpen])
 
-    timeScale.subscribeVisibleLogicalRangeChange(handleVisibleRangeChange)
-    return () => {
-      try { timeScale?.unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange) } catch { /* ignore */ }
-    }
-  }, [loadMoreHistory, isLoadingMore])
-
-  // Fetch comparison symbol data and compute percent changes
-  useEffect(() => {
-    if (!compareSymbol || !dateRange.start || !dateRange.end) {
-      setCompareData([])
-      setMainPctData([])
-      return
-    }
-
-    let cancelled = false
-    setCompareLoading(true)
-
-    async function fetchCompare() {
-      try {
-        const apiSymbol = compareSymbol!.replace('-', '/')
-        const res = await fetchOHLCV(apiSymbol, interval, dateRange.start!, dateRange.end!)
-        if (cancelled) return
-
-        if (res.data?.length > 0 && candles.length > 0) {
-          // Build a map of compare dates (YYYY-MM-DD) to close values
-          const compareDateMap = new Map<string, number>()
-          res.data.forEach((d: { date: string; close: number }) => {
-            compareDateMap.set(d.date, d.close)
-          })
-
-          // Align compare data to main chart timestamps
-          const aligned: Array<{ time: UTCTimestamp; value: number }> = []
-          let lastValue: number | null = null
-
-          for (const candle of candles) {
-            const mainDateStr = new Date(candle.time * 1000).toISOString().split('T')[0]
-
-            if (compareDateMap.has(mainDateStr)) {
-              lastValue = compareDateMap.get(mainDateStr)!
-              aligned.push({ time: candle.time as UTCTimestamp, value: lastValue })
-            } else if (lastValue !== null) {
-              aligned.push({ time: candle.time as UTCTimestamp, value: lastValue })
-            }
-          }
-
-          if (aligned.length > 0) {
-            const baselineCompare = aligned[0].value
-            const baselineMain = candles[0].close
-
-            // Compute percent change from start for compare symbol
-            const comparePct = aligned.map(d => ({
-              time: d.time,
-              value: ((d.value - baselineCompare) / baselineCompare) * 100
-            }))
-
-            // Compute percent change from start for main symbol
-            const mainPct = candles.map(c => ({
-              time: c.time as UTCTimestamp,
-              value: ((c.close - baselineMain) / baselineMain) * 100
-            }))
-
-            setCompareData(comparePct)
-            setMainPctData(mainPct)
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to fetch comparison data:', err)
-        setCompareData([])
-        setMainPctData([])
-      } finally {
-        if (!cancelled) setCompareLoading(false)
-      }
-    }
-
-    fetchCompare()
-    return () => { cancelled = true }
-  }, [compareSymbol, interval, dateRange.start, dateRange.end, symbol, candles])
-
-  // Track the current compare symbol for the series
-  const compareSymbolForSeriesRef = useRef<string | null>(null)
-
-  // Render comparison series with percent change on left Y-axis
-  useEffect(() => {
-    if (chartDisposedRef.current || !chartRef.current) return
-    const chart = chartRef.current
-
-    // Remove series if no compare symbol
-    if (!compareSymbol) {
-      if (compareSeriesRef.current) {
-        try { chart.removeSeries(compareSeriesRef.current) } catch { /* ignore */ }
-        compareSeriesRef.current = null
-        compareSymbolForSeriesRef.current = null
-      }
-      if (mainPctSeriesRef.current) {
-        try { chart.removeSeries(mainPctSeriesRef.current) } catch { /* ignore */ }
-        mainPctSeriesRef.current = null
-      }
-      // Hide left scale when not comparing
-      try {
-        chart.applyOptions({ leftPriceScale: { visible: false } })
-      } catch { /* ignore */ }
-      return
-    }
-
-    // If symbol changed, remove old series first
-    if (compareSeriesRef.current && compareSymbolForSeriesRef.current !== compareSymbol) {
-      try { chart.removeSeries(compareSeriesRef.current) } catch { /* ignore */ }
-      compareSeriesRef.current = null
-    }
-
-    // Wait for data before creating series
-    if (compareData.length === 0 || mainPctData.length === 0) return
-
-    // Create main percent change series (shows main symbol as % change on left axis)
-    if (!mainPctSeriesRef.current) {
-      try {
-        mainPctSeriesRef.current = chart.addSeries(LineSeries, {
-          color: '#3b82f6',  // Blue for main
-          lineWidth: 2,
-          priceScaleId: 'left',
-          lastValueVisible: true,
-          priceLineVisible: false,
-          title: symbol,
-          priceFormat: {
-            type: 'custom',
-            formatter: (price: number) => `${price >= 0 ? '+' : ''}${price.toFixed(1)}%`,
-          },
-        })
-        // Configure the left price scale for percentages
-        mainPctSeriesRef.current.priceScale().applyOptions({
-          scaleMargins: { top: 0.1, bottom: 0.2 },
-          borderColor: 'rgba(59, 130, 246, 0.5)',
-        })
-      } catch (e) {
-        console.warn('Failed to create main pct series:', e)
-      }
-    }
-
-    // Create compare percent change series
-    if (!compareSeriesRef.current) {
-      try {
-        compareSeriesRef.current = chart.addSeries(LineSeries, {
-          color: '#fbbf24',  // Amber for compare
-          lineWidth: 2,
-          priceScaleId: 'left',  // Same left axis as main pct
-          lastValueVisible: true,
-          priceLineVisible: false,
-          title: compareSymbol,
-          priceFormat: {
-            type: 'custom',
-            formatter: (price: number) => `${price >= 0 ? '+' : ''}${price.toFixed(1)}%`,
-          },
-        })
-        compareSymbolForSeriesRef.current = compareSymbol
-      } catch (e) {
-        console.warn('Failed to create comparison series:', e)
-        return
-      }
-    }
-
-    // Update data
-    try {
-      mainPctSeriesRef.current?.setData(mainPctData)
-      compareSeriesRef.current.setData(compareData)
-      // Show left scale when comparing
-      chart.applyOptions({ leftPriceScale: { visible: true } })
-    } catch (e) {
-      console.warn('Failed to set comparison data:', e)
-    }
-  }, [compareSymbol, compareData, mainPctData, symbol])
-
-  // Clear comparison when main symbol changes
-  useEffect(() => {
-    // Skip initial mount
-    if (!compareSeriesRef.current && !compareSymbol) return
-
-    if (chartRef.current && !chartDisposedRef.current) {
-      if (compareSeriesRef.current) {
-        try { chartRef.current.removeSeries(compareSeriesRef.current) } catch { /* ignore */ }
-        compareSeriesRef.current = null
-        compareSymbolForSeriesRef.current = null
-      }
-      if (mainPctSeriesRef.current) {
-        try { chartRef.current.removeSeries(mainPctSeriesRef.current) } catch { /* ignore */ }
-        mainPctSeriesRef.current = null
-      }
-      // Hide left scale when clearing comparison
-      try {
-        chartRef.current.applyOptions({ leftPriceScale: { visible: false } })
-      } catch { /* ignore */ }
-    }
+  const handleWidgetSelect = useCallback((type: WidgetType) => {
+    onWidgetTypeChange(type)
+    setWidgetMenuOpen(false)
+    // Reset candlestick-specific state when switching away
+    indicatorInfoRef.current = null
+    prevSelectedIdsKey.current = ''
+    setIndicatorVersion(v => v + 1)
     setCompareSymbol(null)
-    setCompareData([])
-    setMainPctData([])
-  }, [symbol])
+    setChartStatus('connecting')
+  }, [onWidgetTypeChange])
 
-  // Render macro overlay series on separate 'macro' price scale
-  useEffect(() => {
-    if (chartDisposedRef.current || !chartRef.current) return
-    const chart = chartRef.current
+  // Compute date range for macro dropdown (only relevant for candlestick)
+  const isCandlestick = widgetType === 'candlestick'
+  const controlsDisabled = isCandlestick && chartStatus !== 'connected' && chartStatus !== 'error'
 
-    // Remove series that are no longer in macroOverlays
-    const activeOverlayIds = new Set(macroOverlays.map(o => o.id))
-    const toRemove: string[] = []
-    macroSeriesRef.current.forEach((_series, id) => {
-      if (!activeOverlayIds.has(id)) {
-        toRemove.push(id)
-      }
-    })
-    for (const id of toRemove) {
-      const series = macroSeriesRef.current.get(id)
-      if (series && chart && !chartDisposedRef.current) {
-        try { chart.removeSeries(series) } catch { /* ignore */ }
-      }
-      macroSeriesRef.current.delete(id)
-    }
-
-    // Add/update active overlays
-    macroOverlays.forEach((overlay) => {
-      if (chartDisposedRef.current || !chart || overlay.data.length === 0) return
-
-      let series = macroSeriesRef.current.get(overlay.id)
-      if (!series) {
-        try {
-          series = chart.addSeries(LineSeries, {
-            color: overlay.color,
-            lineWidth: 2,
-            priceScaleId: 'macro',
-            lastValueVisible: true,
-            priceLineVisible: false,
-            title: overlay.seriesId,
-            priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
-          })
-          chart.priceScale('macro').applyOptions({
-            scaleMargins: { top: 0.1, bottom: 0.2 },
-          })
-          macroSeriesRef.current.set(overlay.id, series)
-        } catch (e) {
-          console.warn(`Failed to create macro series for ${overlay.seriesId}:`, e)
-          return
-        }
-      }
-
-      const seriesData = overlay.data
-        .filter(p => p.value !== null && p.value !== undefined)
-        .map(p => ({
-          time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
-          value: Number(p.value),
-        }))
-        .sort((a, b) => a.time - b.time)
-        .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
-
-      if (seriesData.length > 0) {
-        try { series.setData(seriesData) } catch (e) {
-          console.warn(`Failed to set macro data for ${overlay.seriesId}:`, e)
-        }
-      }
-    })
-  }, [macroOverlays])
-
-  // Clean up macro series when symbol changes
-  useEffect(() => {
-    if (!chartRef.current || chartDisposedRef.current) return
-    const chart = chartRef.current
-    macroSeriesRef.current.forEach((series) => {
-      try { chart.removeSeries(series) } catch { /* ignore */ }
-    })
-    macroSeriesRef.current.clear()
-  }, [symbol])
+  // Resolve widget component
+  const WidgetComponent = getWidgetComponent(widgetType)
 
   return (
     <div
@@ -698,177 +112,146 @@ export function ChartPane({ paneId, symbol, interval, isActive, onActivate, onSy
       {/* Pane header */}
       <div className="flex items-center justify-between gap-2 px-2 py-1 bg-[var(--bg-darker)] border-b border-[var(--border)] min-h-[28px]">
         <div className="flex items-center gap-2 min-w-0">
-          {/* Symbol dropdown with search */}
-          <div onClick={e => e.stopPropagation()}>
-            <TickerDropdown value={symbol} onChange={onSymbolChange} />
+          {/* Widget type selector */}
+          <div className="relative" ref={menuRef} onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setWidgetMenuOpen(v => !v)}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-white/5 hover:bg-white/10 transition-colors text-[var(--text-secondary)]"
+              title={definition.label}
+            >
+              <span>{definition.icon}</span>
+              <svg className="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+
+            {widgetMenuOpen && (
+              <div className="absolute top-full left-0 mt-1 w-52 rounded-lg bg-[#1a1f2e] border border-[var(--border)] shadow-xl z-50 py-1 max-h-80 overflow-y-auto">
+                {WIDGET_CATEGORIES.map(cat => {
+                  const items = GROUPED_WIDGETS[cat]
+                  if (!items || items.length === 0) return null
+                  return (
+                    <div key={cat}>
+                      <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]">
+                        {cat}
+                      </div>
+                      {items.map(def => (
+                        <button
+                          key={def.type}
+                          onClick={() => handleWidgetSelect(def.type)}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-white/5 transition-colors text-left"
+                        >
+                          <span className="w-5 text-center">{def.icon}</span>
+                          <span className="text-[var(--text-primary)] flex-1">{def.label}</span>
+                          {def.type === widgetType && (
+                            <span className="text-[var(--green-up)]">&#10003;</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Per-pane interval selector */}
-          <PaneIntervalSelector value={interval} onChange={onIntervalChange} />
-
-          {/* Active indicator chips */}
-          {selectedIds.length > 0 && (
-            <div className="flex items-center gap-0.5">
-              {selectedIds.slice(0, 3).map(id => {
-                const config = availableIndicators.find(i => i.id === id)
-                if (!config) return null
-                return (
-                  <button
-                    key={id}
-                    onClick={(e) => { e.stopPropagation(); toggleIndicator(id) }}
-                    className="flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-mono bg-white/5 hover:bg-white/10 transition-colors"
-                    style={{ color: config.color }}
-                    title={`Remove ${config.label}`}
-                  >
-                    {config.label}
-                    <span className="text-[var(--text-tertiary)]">&times;</span>
-                  </button>
-                )
-              })}
-              {selectedIds.length > 3 && (
-                <span className="text-[10px] text-[var(--text-tertiary)]">+{selectedIds.length - 3}</span>
-              )}
+          {/* Symbol dropdown — only if widget needs a symbol */}
+          {definition.needsSymbol && (
+            <div onClick={e => e.stopPropagation()}>
+              <TickerDropdown value={symbol} onChange={onSymbolChange} />
             </div>
           )}
-          <IndicatorsDropdown
-            indicators={availableIndicators}
-            selectedIds={selectedIds}
-            onToggle={toggleIndicator}
-            disabled={status !== 'connected' && status !== 'error'}
-          />
-          <div onClick={e => e.stopPropagation()}>
-            <CompareDropdown
-              value={compareSymbol}
-              onChange={setCompareSymbol}
-              disabled={status !== 'connected' && status !== 'error'}
-              currentSymbol={symbol}
-            />
-          </div>
-          {onAddMacroOverlay && onRemoveMacroOverlay && (
+
+          {/* Interval selector — only if widget needs interval */}
+          {definition.needsInterval && (
+            <PaneIntervalSelector value={interval} onChange={onIntervalChange} />
+          )}
+
+          {/* Indicator chips + dropdown — only if widget supports indicators */}
+          {definition.supportsIndicators && indicatorInfo && (
+            <>
+              {indicatorInfo.selectedIds.length > 0 && (
+                <div className="flex items-center gap-0.5">
+                  {indicatorInfo.selectedIds.slice(0, 3).map(id => {
+                    const config = indicatorInfo.availableIndicators.find(i => i.id === id)
+                    if (!config) return null
+                    return (
+                      <button
+                        key={id}
+                        onClick={(e) => { e.stopPropagation(); indicatorInfo.toggleIndicator(id) }}
+                        className="flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-mono bg-white/5 hover:bg-white/10 transition-colors"
+                        style={{ color: config.color }}
+                        title={`Remove ${config.label}`}
+                      >
+                        {config.label}
+                        <span className="text-[var(--text-tertiary)]">&times;</span>
+                      </button>
+                    )
+                  })}
+                  {indicatorInfo.selectedIds.length > 3 && (
+                    <span className="text-[10px] text-[var(--text-tertiary)]">+{indicatorInfo.selectedIds.length - 3}</span>
+                  )}
+                </div>
+              )}
+              <IndicatorsDropdown
+                indicators={indicatorInfo.availableIndicators}
+                selectedIds={indicatorInfo.selectedIds}
+                onToggle={indicatorInfo.toggleIndicator}
+                disabled={controlsDisabled}
+              />
+            </>
+          )}
+
+          {/* Compare dropdown — only for candlestick */}
+          {isCandlestick && (
             <div onClick={e => e.stopPropagation()}>
-              <MacroDropdown
-                paneId={paneId}
-                activeOverlays={macroOverlays}
-                onAddOverlay={onAddMacroOverlay}
-                onRemoveOverlay={onRemoveMacroOverlay}
-                disabled={status !== 'connected' && status !== 'error'}
-                startDate={dateRange.start}
-                endDate={dateRange.end}
+              <CompareDropdown
+                value={compareSymbol}
+                onChange={setCompareSymbol}
+                disabled={controlsDisabled}
+                currentSymbol={symbol}
               />
             </div>
           )}
-          {/* Active macro chips */}
-          {macroOverlays.length > 0 && (
-            <div className="flex items-center gap-0.5">
-              {macroOverlays.slice(0, 2).map(overlay => (
-                <button
-                  key={overlay.id}
-                  onClick={(e) => { e.stopPropagation(); onRemoveMacroOverlay?.(overlay.id) }}
-                  className="flex items-center gap-0.5 px-1 py-0 rounded text-[10px] font-mono bg-white/5 hover:bg-white/10 transition-colors"
-                  style={{ color: overlay.color }}
-                  title={`Remove ${overlay.name}`}
-                >
-                  {overlay.seriesId}
-                  <span className="text-[var(--text-tertiary)]">&times;</span>
-                </button>
-              ))}
-              {macroOverlays.length > 2 && (
-                <span className="text-[10px] text-[var(--text-tertiary)]">+{macroOverlays.length - 2}</span>
-              )}
-            </div>
-          )}
+
         </div>
 
         <div className="flex items-center gap-1">
-          {/* Layout selector (only in single-pane mode) */}
           {showLayoutSelector && layoutValue && onLayoutChange && (
             <div onClick={e => e.stopPropagation()}>
               <LayoutSelector value={layoutValue} onChange={onLayoutChange} />
             </div>
           )}
-          {/* Connection dot */}
+          {/* Connection dot — shows chart status for candlestick, green for placeholders */}
           <span className={`w-1.5 h-1.5 rounded-full ${
-            status === 'connected' ? 'bg-[var(--green-up)]' :
-            status === 'connecting' ? 'bg-yellow-500 animate-pulse' :
-            'bg-[var(--red-down)]'
+            isCandlestick
+              ? (chartStatus === 'connected' ? 'bg-[var(--green-up)]' :
+                 chartStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+                 'bg-[var(--red-down)]')
+              : 'bg-[var(--text-tertiary)]'
           }`} />
         </div>
       </div>
 
-      {/* Stats bar */}
-      {latestCandle && (
-        <div className="flex items-center gap-3 px-2 py-0.5 bg-[var(--bg-dark)] border-b border-[var(--border)] text-[11px] font-mono flex-wrap">
-          {/* Price + Change */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold text-[var(--text-primary)]">
-              {formatPrice(latestCandle.close)}
-            </span>
-            {changeFromOpen !== null && changePctFromOpen !== null && (
-              <span className={changeFromOpen >= 0 ? 'text-[var(--green-up)]' : 'text-[var(--red-down)]'}>
-                {changeFromOpen >= 0 ? '+' : '-'}{formatPrice(Math.abs(changeFromOpen))}
-                {' '}({changePctFromOpen >= 0 ? '+' : ''}{changePctFromOpen.toFixed(2)}%)
-              </span>
-            )}
-          </div>
-
-          <span className="text-[var(--border)]">|</span>
-
-          {/* OHLCV */}
-          <div className="flex items-center gap-1">
-            <span className="text-[var(--text-tertiary)]">O</span>
-            <span className="text-[var(--text-primary)]">{formatPrice(latestCandle.open)}</span>
-            <span className="text-[var(--text-tertiary)]">H</span>
-            <span className="text-[var(--green-up)]">{formatPrice(latestCandle.high)}</span>
-            <span className="text-[var(--text-tertiary)]">L</span>
-            <span className="text-[var(--red-down)]">{formatPrice(latestCandle.low)}</span>
-          </div>
-
-          {latestCandle.volume !== undefined && (
-            <>
-              <span className="text-[var(--border)]">|</span>
-              <div className="flex items-center gap-1">
-                <span className="text-[var(--text-tertiary)]">Vol</span>
-                <span className="text-[var(--text-secondary)]">{formatNumber(latestCandle.volume)}</span>
-              </div>
-            </>
-          )}
-
-          {/* Crypto: market cap + 24h volume from CoinGecko */}
-          {isCrypto && marketStats && (
-            <>
-              <span className="text-[var(--border)]">|</span>
-              <div className="flex items-center gap-1">
-                <span className="text-[var(--text-tertiary)]">MCap</span>
-                <span className="text-[var(--text-secondary)]">{formatNumber(marketStats.marketCap)}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-[var(--text-tertiary)]">24h Vol</span>
-                <span className="text-[var(--text-secondary)]">{formatNumber(marketStats.volume24h)}</span>
-              </div>
-            </>
-          )}
-
-          {/* Equity: delayed data badge */}
-          {showDelayedBanner && (
-            <span className="text-amber-400/70 text-[10px]" title="Yahoo Finance provides delayed/EOD data. Connect a broker for live data.">
-              Delayed
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Chart container */}
-      <div className="relative flex-1 min-h-0">
-        <div ref={containerRef} className="w-full h-full" />
-
-        {(status === 'connecting' || (candles.length < 5 && status !== 'error')) && (
-          <LoadingOverlay message={status === 'connecting' ? 'Connecting...' : 'Loading...'} />
-        )}
-
-        {status === 'error' && candles.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-sm text-[var(--red-down)]">Failed to load data for {symbol}</p>
-          </div>
+      {/* Widget body */}
+      <div className="flex flex-col flex-1 min-h-0">
+        {isCandlestick ? (
+          <WidgetComponent
+            paneId={paneId}
+            symbol={symbol}
+            interval={interval}
+            macroOverlays={[]}
+            compareSymbol={compareSymbol}
+            onCompareSymbolChange={setCompareSymbol}
+            onStatusChange={setChartStatus}
+            onIndicatorsReady={handleIndicatorsReady}
+          />
+        ) : (
+          <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--bg-dark)]"><div className="w-6 h-6 border-2 border-[var(--text-tertiary)] border-t-[var(--text-primary)] rounded-full animate-spin" /></div>}>
+            <WidgetComponent
+              definition={definition}
+              width={0}
+              height={0}
+            />
+          </Suspense>
         )}
       </div>
     </div>

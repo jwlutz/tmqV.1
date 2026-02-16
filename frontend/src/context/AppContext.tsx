@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect, ReactNode } from 'react';
 import { fetchConfig, ServerConfig } from '../api/client';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import type { WidgetType } from '../widgets/types';
+import { LAYOUT_PRESETS } from '../widgets/presets';
 
 type Mode = 'live' | 'backtest';
 
@@ -68,13 +70,15 @@ export interface ChartPaneState {
   interval: string;
   indicators: string[]; // selected indicator IDs
   macroOverlays: MacroOverlay[];
+  widgetType: WidgetType;
+  widgetConfig: Record<string, any>;
 }
 
 const DEFAULT_SYMBOL = 'BTC-USD';
 const DEFAULT_INTERVAL = '1d';
 
-function createPane(id: string, symbol: string = DEFAULT_SYMBOL, interval: string = DEFAULT_INTERVAL): ChartPaneState {
-  return { id, symbol, interval, indicators: [], macroOverlays: [] };
+function createPane(id: string, symbol: string = DEFAULT_SYMBOL, interval: string = DEFAULT_INTERVAL, widgetType: WidgetType = 'candlestick', widgetConfig: Record<string, any> = {}): ChartPaneState {
+  return { id, symbol, interval, indicators: [], macroOverlays: [], widgetType, widgetConfig };
 }
 
 interface AppContextValue {
@@ -123,6 +127,8 @@ interface AppContextValue {
   setActivePaneId: (id: string) => void;
   setPaneSymbol: (paneId: string, symbol: string) => void;
   setPaneInterval: (paneId: string, interval: string) => void;
+  setWidgetType: (paneId: string, widgetType: WidgetType) => void;
+  applyLayoutPreset: (presetId: string) => void;
   // Code panel
   codePanelOpen: boolean;
   setCodePanelOpen: (open: boolean) => void;
@@ -189,9 +195,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Code panel (persisted)
   const [codePanelOpen, setCodePanelOpen] = useLocalStorage('codePanelOpen', true);
   const [sandboxCode, setSandboxCode] = useState('');
-  // FRED macro data
-  const [fredApiKey, setFredApiKey] = useState('');
-  const [fredConfigured, setFredConfigured] = useState(false);
+  // FRED macro data (persisted so widgets don't flash "not configured" on reload)
+  const [fredApiKey, setFredApiKey] = useLocalStorage('fredApiKey', '');
+  const [fredConfigured, setFredConfigured] = useLocalStorage('fredConfigured', false);
   // Settings overlay
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -268,6 +274,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ));
   }, []);
 
+  const setWidgetType = useCallback((paneId: string, widgetType: WidgetType) => {
+    setPanes(prev => prev.map(p =>
+      p.id === paneId ? { ...p, widgetType, widgetConfig: {} } : p
+    ));
+  }, []);
+
+  const applyLayoutPreset = useCallback((presetId: string) => {
+    const preset = LAYOUT_PRESETS[presetId];
+    if (!preset) return;
+
+    setLayoutState(preset.layout);
+    const newPanes = preset.panes.map((p, i) =>
+      createPane(`pane-${i + 1}`, p.symbol || DEFAULT_SYMBOL, DEFAULT_INTERVAL, p.widgetType)
+    );
+    setPanes(newPanes);
+    setActivePaneIdState('pane-1');
+    setSymbolState(newPanes[0].symbol);
+  }, []);
+
   const setLayout = useCallback((newLayout: ChartLayout) => {
     setLayoutState(newLayout);
     const currentPanes = panesRef.current;
@@ -329,6 +354,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActivePaneId: handleSetActivePaneId,
       setPaneSymbol,
       setPaneInterval,
+      setWidgetType,
+      applyLayoutPreset,
       // Code panel
       codePanelOpen, setCodePanelOpen,
       sandboxCode, setSandboxCode,
@@ -393,8 +420,8 @@ export function useDataSettings() {
 }
 
 export function useChartLayout() {
-  const { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol, setPaneInterval } = useAppContext();
-  return { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol, setPaneInterval };
+  const { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol, setPaneInterval, setWidgetType, applyLayoutPreset } = useAppContext();
+  return { layout, setLayout, panes, activePaneId, setActivePaneId, setPaneSymbol, setPaneInterval, setWidgetType, applyLayoutPreset };
 }
 
 export function useCodePanel() {

@@ -259,9 +259,15 @@ def configure_fred(api_key: str):
 
 
 def get_fred() -> FREDProvider:
-    """Get configured FRED provider. Raises if not configured."""
+    """Get configured FRED provider. Auto-configures from env if available."""
+    global _fred_provider
     if _fred_provider is None:
-        raise RuntimeError("FRED not configured. Call configure_fred(api_key) first.")
+        import os
+        api_key = os.environ.get("FRED_API_KEY")
+        if api_key:
+            _fred_provider = FREDProvider(api_key)
+        else:
+            raise RuntimeError("FRED not configured. Call configure_fred(api_key) first.")
     return _fred_provider
 
 

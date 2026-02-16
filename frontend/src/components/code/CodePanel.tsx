@@ -88,11 +88,14 @@ export function CodePanel() {
   }, [code, activeSymbol, interval, isRunning, setBacktestResult])
 
   return (
-    <div className="flex flex-col border-t border-[var(--border)] bg-[var(--bg-dark)]">
+    <div className="flex flex-col border-t border-[var(--border)] bg-[var(--bg-dark)] h-full">
       {/* Header bar — always visible */}
-      <button
+      <div
         onClick={() => setCodePanelOpen(!codePanelOpen)}
         className="flex items-center justify-between px-3 py-1.5 hover:bg-white/5 transition-colors cursor-pointer w-full text-left"
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setCodePanelOpen(!codePanelOpen) }}
       >
         <div className="flex items-center gap-2">
           <span className="text-xs font-mono font-semibold text-[var(--text-secondary)]">
@@ -136,11 +139,11 @@ export function CodePanel() {
             )}
           </button>
         </div>
-      </button>
+      </div>
 
       {/* Editor — collapsible */}
       {codePanelOpen && (
-        <div className="h-[250px] border-t border-[var(--border)]">
+        <div className="flex-1 min-h-0 border-t border-[var(--border)]">
           <Editor
             height="100%"
             defaultLanguage="python"

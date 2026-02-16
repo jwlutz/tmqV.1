@@ -3,7 +3,7 @@ import { useMode, useBacktest, useChatSettings, useCodePanel } from '../../conte
 import { useChat } from '../../hooks';
 import { ChatMessage, ChatInput, QuickActions, TypingIndicator } from '../chat';
 
-export function ChatSidebar() {
+export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
   const { mode } = useMode();
   const { setBacktestResult } = useBacktest();
   const {
@@ -61,13 +61,16 @@ export function ChatSidebar() {
       </button>
 
       {/* Sidebar */}
-      <div className={`
-        fixed lg:relative inset-y-0 right-0 z-40
-        w-[350px] flex-none bg-[var(--bg-dark)] border-l border-[var(--border)]
-        flex flex-col
-        transform transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
-      `}>
+      <div
+        className={`
+          fixed lg:relative inset-y-0 right-0 z-40
+          flex-none bg-[var(--bg-dark)] border-l border-[var(--border)]
+          flex flex-col
+          transform transition-transform duration-300 ease-in-out
+          ${isOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
+        `}
+        style={style}
+      >
         {/* Mobile close button */}
         <button
           onClick={() => setIsOpen(false)}

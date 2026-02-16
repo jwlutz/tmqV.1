@@ -4,8 +4,12 @@
 - audit backtest results and give feedback/improve prompts/tools
 
 **lutz todos**
-- spec out macro page
-- cookies to save state of charts
+[x] spec out macro page
+[x]add macro widgets
+[x] cookies to save state of charts (used local storage)
+- SEC scraping integration
+- show insider buying, politician buying
+- shkreli model building from SEC forms
 - db schema & auth
 
 **Far Future**

@@ -219,13 +219,33 @@ export async function fetchMacroSeries(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ series_id: seriesId, start: start || "", end: end || "" }),
   });
-  if (!res.ok) throw new Error(`Macro fetch failed: ${res.statusText}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Macro fetch failed: ${res.statusText}`);
+  }
   return res.json();
 }
 
 export async function fetchPopularMacroSeries(): Promise<MacroSeriesInfo[]> {
   const res = await fetch(`${BASE_URL}/api/macro/series`);
   if (!res.ok) throw new Error(`Popular series fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchMacroMultiple(
+  seriesIds: string[],
+  start?: string,
+  end?: string
+): Promise<{ series_ids: string[]; data: Array<Record<string, string | number>> }> {
+  const res = await fetch(`${BASE_URL}/api/macro/fetch_multiple`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ series_ids: seriesIds, start: start || "", end: end || "" }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Macro fetch_multiple failed: ${res.statusText}`);
+  }
   return res.json();
 }
 
