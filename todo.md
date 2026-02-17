@@ -1,4 +1,12 @@
 **2/17**
+**have demo ready for tomorrow**
+- that means MCP integration!!
+- test cases need to work:
+    - simple backtest
+    - have AI change the screen
+    - have AI calculate indicator(s) and apply them to the chart
+
+
 - need AI output
     - MCP needs to respond
     - error handling
@@ -16,6 +24,19 @@ example functions:
 - compare (overlay chart)
 - make sure it has access to all info on the page-- test this by asking it
 
+QOL:
+- ability to open and close windows (like BB terminal)
+- make sure MCP can also open and close windows
+- MCP should also be able to switch chart to different windows
+- keep chart window modular
+- remove AI artifacts (live, green dot, remove emojis)
+- turn quick actions to examples
+
+backtester code functions
+- for indicators: 
+    - folder for fundamentals
+    - folder for user's custom indicators pulled from code section (AI can write those)(benchmark for code, MCP, chart integration)
+    - buy and sell indicators on bars when running a backtest, displayed on bars
 
 **sammy todos**
 - indicators (see if tradingview package has them for free)
