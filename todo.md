@@ -1,3 +1,22 @@
+**2/17**
+- need AI output
+    - MCP needs to respond
+    - error handling
+- get AI contextually aware of what the user's pane looks like
+- give AI ability to change the screens
+- ability to turn indicators on and off (and compare mode)
+- custom code vision and execution ability
+- **see if lightweight charts does indicators**
+
+example functions:
+- percent change start to end (do YTD if no start date given)
+- show indicator
+- swap ticker on chart
+- swap timedelta (bar length)
+- compare (overlay chart)
+- make sure it has access to all info on the page-- test this by asking it
+
+
 **sammy todos**
 - indicators (see if tradingview package has them for free)
 - fix normalization of charts
