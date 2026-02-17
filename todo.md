@@ -10,6 +10,7 @@
 - need AI output
     - MCP needs to respond
     - error handling
+- make volume a toggle/indicator!!
 - get AI contextually aware of what the user's pane looks like
 - give AI ability to change the screens
 - ability to turn indicators on and off (and compare mode)
