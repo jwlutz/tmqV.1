@@ -187,7 +187,6 @@ export function ChartPane({
                 </div>
               )}
               <IndicatorsDropdown
-                indicators={indicatorInfo.availableIndicators}
                 categories={indicatorInfo.indicatorCategories}
                 selectedIds={indicatorInfo.selectedIds}
                 onToggle={indicatorInfo.toggleIndicator}

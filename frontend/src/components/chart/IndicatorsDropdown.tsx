@@ -3,7 +3,6 @@ import type { IndicatorConfig, CustomIndicator } from '../../hooks/useIndicators
 import { CustomIndicatorDialog } from './CustomIndicatorDialog'
 
 interface IndicatorsDropdownProps {
-  indicators: IndicatorConfig[]
   categories: Record<string, IndicatorConfig[]>
   selectedIds: string[]
   onToggle: (id: string) => void

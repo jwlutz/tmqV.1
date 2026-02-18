@@ -1,10 +1,42 @@
-import { useMode, useSettingsOverlay, useBacktest } from '../../context'
+import { useState, useRef, useEffect } from 'react'
+import { useMode, useSettingsOverlay, useBacktest, useWorkspace } from '../../context'
+import type { WorkspacePaneType } from '../../context'
+
+const PANE_OPTIONS: { type: WorkspacePaneType; label: string; icon: string }[] = [
+  { type: 'chart', label: 'Chart', icon: '\u{1F4C8}' },
+  { type: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
+  { type: 'code', label: 'Code', icon: '\u{1F4BB}' },
+]
 
 export function TopBar() {
   const { mode, setMode } = useMode()
   const { setSettingsOpen } = useSettingsOverlay()
   const { backtestResult } = useBacktest()
+  const { panes, openPane } = useWorkspace()
   const hasResults = !!backtestResult
+
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!addMenuOpen) return
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setAddMenuOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [addMenuOpen])
+
+  const handleAddPane = (type: WorkspacePaneType) => {
+    openPane(type)
+    setAddMenuOpen(false)
+  }
+
+  // Check which panes are already open
+  const openTypes = new Set(panes.map(p => p.type))
 
   return (
     <header className="h-12 flex-none bg-[var(--bg-dark)] border-b border-[var(--border)] flex items-center justify-between px-3 md:px-4">
@@ -18,6 +50,48 @@ export function TopBar() {
           <span className="hidden sm:inline">thats_my_quant</span>
           <span className="sm:hidden">TMQ</span>
         </a>
+
+        {/* Add pane dropdown */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setAddMenuOpen(v => !v)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium
+                       bg-white/5 hover:bg-white/10 text-[var(--text-secondary)] hover:text-[var(--text-primary)]
+                       transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            <span className="hidden sm:inline">Add</span>
+            <svg className="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 10 6">
+              <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+
+          {addMenuOpen && (
+            <div className="absolute top-full left-0 mt-1 w-36 rounded-lg bg-[#1a1f2e] border border-[var(--border)] shadow-xl z-50 py-1">
+              {PANE_OPTIONS.map(opt => {
+                const isOpen = openTypes.has(opt.type)
+                return (
+                  <button
+                    key={opt.type}
+                    onClick={() => handleAddPane(opt.type)}
+                    disabled={isOpen}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors
+                      ${isOpen
+                        ? 'text-[var(--text-tertiary)] cursor-not-allowed'
+                        : 'hover:bg-white/5 text-[var(--text-primary)]'
+                      }`}
+                  >
+                    <span className="text-sm">{opt.icon}</span>
+                    <span>{opt.label}</span>
+                    {isOpen && <span className="ml-auto text-[10px] text-[var(--text-tertiary)]">open</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-2">

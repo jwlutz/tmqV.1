@@ -223,6 +223,10 @@ export function CandlestickWidget({
     }
   }, [])
 
+  // Track showVolume in a ref so candle update effect doesn't re-run on toggle
+  const showVolumeRef = useRef(showVolume)
+  showVolumeRef.current = showVolume
+
   // Update chart when candles change
   useEffect(() => {
     if (chartDisposedRef.current) return
@@ -249,7 +253,7 @@ export function CandlestickWidget({
         }))
 
         candleSeriesRef.current.setData(chartCandles)
-        if (showVolume) {
+        if (showVolumeRef.current) {
           volumeSeriesRef.current.setData(chartVolume)
         } else {
           volumeSeriesRef.current.setData([])
@@ -271,7 +275,7 @@ export function CandlestickWidget({
             open: lastCandle.open, high: lastCandle.high,
             low: lastCandle.low, close: lastCandle.close,
           })
-          if (showVolume) {
+          if (showVolumeRef.current) {
             volumeSeriesRef.current.update({
               time: lastCandle.time as UTCTimestamp,
               value: lastCandle.volume ?? 0,
@@ -286,7 +290,7 @@ export function CandlestickWidget({
       console.warn('Chart update failed, will reset:', e)
       isResettingRef.current = true
     }
-  }, [candles, showVolume])
+  }, [candles])
 
   // Toggle volume visibility
   useEffect(() => {
@@ -316,11 +320,10 @@ export function CandlestickWidget({
       }
     })
 
-    // Remove deselected series
+    // Remove series that are no longer active
     const idsToRemove: string[] = []
     indicatorSeriesRef.current.forEach((_series, seriesKey) => {
-      const indicatorId = seriesKey.split(':')[0]
-      if (!selectedIds.includes(indicatorId) && !activeSeriesKeys.has(seriesKey)) {
+      if (!activeSeriesKeys.has(seriesKey)) {
         idsToRemove.push(seriesKey)
       }
     })

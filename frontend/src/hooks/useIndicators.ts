@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { indicatorRegistry } from 'lightweight-charts-indicators'
 import type { Bar } from 'oakscriptjs'
 import type { Candle } from './useMarketData'
@@ -133,7 +133,6 @@ export function useIndicators({ candles }: UseIndicatorsOptions) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [showVolume, setShowVolume] = useState(true)
   const [customIndicators, setCustomIndicators] = useState<CustomIndicator[]>([])
-  const prevCandleKeyRef = useRef('')
 
   // Memoize bars conversion
   const bars = useMemo(() => candlesToBars(candles), [candles])
@@ -158,9 +157,9 @@ export function useIndicators({ candles }: UseIndicatorsOptions) {
           if (!Array.isArray(plotData)) continue
           const points: IndicatorPlotPoint[] = []
           for (let i = 0; i < plotData.length; i++) {
-            const val = (plotData[i] as { value: number }).value
-            if (val !== undefined && !isNaN(val) && bars[i]) {
-              points.push({ time: bars[i].time as number, value: val })
+            const point = plotData[i] as { time: number; value: number }
+            if (point.value !== undefined && !isNaN(point.value)) {
+              points.push({ time: point.time, value: point.value })
             }
           }
           plots[plotKey] = points
@@ -215,18 +214,6 @@ export function useIndicators({ candles }: UseIndicatorsOptions) {
   const activeIndicators = useMemo(() => {
     return [...indicatorResults, ...customResults]
   }, [indicatorResults, customResults])
-
-  // Reset selections when candles change significantly (new symbol)
-  useEffect(() => {
-    const key = candles.length > 0
-      ? `${candles[0].time}-${candles[candles.length - 1].time}-${candles.length}`
-      : ''
-    // Only reset if the data source changes completely (different time range)
-    if (prevCandleKeyRef.current && key && key !== prevCandleKeyRef.current) {
-      // Don't clear selections — just let them recompute with new data
-    }
-    prevCandleKeyRef.current = key
-  }, [candles])
 
   const toggleIndicator = useCallback((id: string) => {
     setSelectedIds(prev =>

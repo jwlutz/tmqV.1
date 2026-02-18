@@ -8,6 +8,20 @@ type Mode = 'live' | 'backtest';
 
 export type ChartLayout = '1x1' | '1x2' | '2x2';
 
+// Workspace pane types
+export type WorkspacePaneType = 'chart' | 'chat' | 'code';
+
+export interface WorkspacePane {
+  id: string;
+  type: WorkspacePaneType;
+}
+
+const DEFAULT_WORKSPACE_PANES: WorkspacePane[] = [
+  { id: 'pane-chart', type: 'chart' },
+  { id: 'pane-chat', type: 'chat' },
+  { id: 'pane-code', type: 'code' },
+];
+
 // Provider credential types
 export interface AlpacaCredentials {
   apiKey: string;
@@ -144,6 +158,10 @@ interface AppContextValue {
   // Settings overlay
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
+  // Workspace panes
+  workspacePanes: WorkspacePane[];
+  openPane: (type: WorkspacePaneType) => void;
+  closePane: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -200,6 +218,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [fredConfigured, setFredConfigured] = useLocalStorage('fredConfigured', false);
   // Settings overlay
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Workspace panes (persisted)
+  const [workspacePanes, setWorkspacePanes] = useLocalStorage<WorkspacePane[]>('workspacePanes', DEFAULT_WORKSPACE_PANES);
+
+  const openPane = useCallback((type: WorkspacePaneType) => {
+    setWorkspacePanes(prev => {
+      // Check if pane of this type already exists
+      if (prev.some(p => p.type === type)) return prev;
+      const id = `pane-${type}-${Date.now()}`;
+      return [...prev, { id, type }];
+    });
+  }, []);
+
+  const closePane = useCallback((id: string) => {
+    setWorkspacePanes(prev => prev.filter(p => p.id !== id));
+  }, []);
 
   const setProviderCredential = useCallback(<K extends keyof ProviderCredentials>(
     provider: K,
@@ -365,6 +398,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addMacroOverlay, removeMacroOverlay,
       // Settings overlay
       settingsOpen, setSettingsOpen,
+      // Workspace panes
+      workspacePanes, openPane, closePane,
     }}>
       {children}
     </AppContext.Provider>
@@ -447,4 +482,9 @@ export function useMacroOverlays() {
 export function useSettingsOverlay() {
   const { settingsOpen, setSettingsOpen } = useAppContext();
   return { settingsOpen, setSettingsOpen };
+}
+
+export function useWorkspace() {
+  const { workspacePanes, openPane, closePane } = useAppContext();
+  return { panes: workspacePanes, openPane, closePane };
 }

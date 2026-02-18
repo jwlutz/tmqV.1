@@ -1,4 +1,4 @@
-**2/17**
+**2/17-2/18**
 **have demo ready for tomorrow**
 - that means MCP integration!!
 - test cases need to work:
@@ -9,9 +9,9 @@
 
 - need AI output
     - MCP needs to respond
-    - error handling
+    [x] error handling (added try/catch, SSE error events)
 - make volume a toggle/indicator!!
-[x] get AI contextually aware of what the user's pane looks like
+[x] get AI contextually aware of what the user's pane looks like (symbol, interval, widget type passed to backend)
 - give AI ability to change the screens
 - ability to turn indicators on and off (and compare mode)
 - custom code vision and execution ability
@@ -32,12 +32,14 @@ QOL:
 - keep chart window modular
 [x] remove AI artifacts (live, green dot, remove emojis)
 [x] turn quick actions to examples
+[x] markdown rendering in chat panel (react-markdown + remark-gfm + tailwind typography)
+[x] AI prompted to use proper markdown tables
 
 backtester code functions
-- for indicators: 
+- for indicators:
     - folder for fundamentals
     - folder for user's custom indicators pulled from code section (AI can write those)(benchmark for code, MCP, chart integration)
-    - buy and sell indicators on bars when running a backtest, displayed on bars
+    [x] buy and sell indicators on bars when running a backtest, displayed on bars (trade markers with toggles)
 
 ----------------------------------------
 
@@ -63,8 +65,8 @@ backtester code functions
 - forward-testing
 
 **Immediate**
-- BETTER SYSTEM PROMPTS!!!
-- make sure AI is time-aware
+[x] BETTER SYSTEM PROMPTS!!! (added markdown table formatting, few-shot examples with table output)
+[x] make sure AI is time-aware (datetime context already in prompts)
 - README with instructions
 - dropdowns associated with individual charts
 - make sure alpaca gives access to live equities charts that read correctly
