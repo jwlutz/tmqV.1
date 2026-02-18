@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useMode, useBacktest, useChatSettings, useCodePanel } from '../../context';
+import { useBacktest, useChatSettings, useCodePanel } from '../../context';
 import { useChat } from '../../hooks';
 import { ChatMessage, ChatInput, QuickActions, TypingIndicator } from '../chat';
 
 export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
-  const { mode } = useMode();
   const { setBacktestResult } = useBacktest();
   const {
     apiKey, model,
@@ -81,15 +80,8 @@ export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
           &#10005;
         </button>
 
-        <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
+        <div className="p-3 border-b border-[var(--border)]">
           <h2 className="font-semibold text-[var(--text-primary)]">Chat</h2>
-          <span className={`text-xs px-2 py-0.5 rounded-full ${
-            mode === 'live'
-              ? 'bg-[var(--green-up)]/20 text-[var(--green-up)]'
-              : 'bg-[var(--text-secondary)]/20 text-[var(--text-secondary)]'
-          }`}>
-            {mode === 'live' ? '\u25CF Live' : '\u25C9 Backtest'}
-          </span>
         </div>
 
         <QuickActions onAction={handleAction} disabled={isTyping} />

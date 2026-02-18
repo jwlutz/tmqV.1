@@ -17,8 +17,8 @@ test.describe('App Loading', () => {
     // Chat sidebar visible
     await expect(page.getByText('Chat')).toBeVisible();
 
-    // Quick actions visible
-    await expect(page.getByText('Quick Actions')).toBeVisible();
+    // Examples visible
+    await expect(page.getByText('Examples')).toBeVisible();
   });
 
   test('should show welcome message in chat', async ({ page }) => {

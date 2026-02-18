@@ -39,6 +39,8 @@ backtester code functions
     - folder for user's custom indicators pulled from code section (AI can write those)(benchmark for code, MCP, chart integration)
     - buy and sell indicators on bars when running a backtest, displayed on bars
 
+----------------------------------------
+
 **sammy todos**
 - indicators (see if tradingview package has them for free)
 - fix normalization of charts
