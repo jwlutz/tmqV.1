@@ -51,15 +51,13 @@ export function ChartPane({
   const [compareSymbol, setCompareSymbol] = useState<string | null>(null)
 
   // Store indicator info in a ref to avoid infinite re-render loops.
-  // The ref always holds the latest info; we use a version counter
-  // to trigger re-renders only when selectedIds actually change.
   const indicatorInfoRef = useRef<CandlestickIndicatorInfo | null>(null)
   const [indicatorVersion, setIndicatorVersion] = useState(0)
   const prevSelectedIdsKey = useRef('')
 
   const handleIndicatorsReady = useCallback((info: CandlestickIndicatorInfo) => {
     indicatorInfoRef.current = info
-    const key = info.selectedIds.join(',') + '|' + (info.dateRange?.start || '') + '|' + (info.dateRange?.end || '')
+    const key = info.selectedIds.join(',') + '|' + String(info.showVolume)
     if (key !== prevSelectedIdsKey.current) {
       prevSelectedIdsKey.current = key
       setIndicatorVersion(v => v + 1)
@@ -67,7 +65,7 @@ export function ChartPane({
   }, [])
 
   // Read the ref — the version counter ensures this re-evaluates when needed
-  void indicatorVersion // ensure the variable is "used" so React tracks the dependency
+  void indicatorVersion
   const indicatorInfo = indicatorInfoRef.current
 
   // Close widget menu on outside click
@@ -85,7 +83,6 @@ export function ChartPane({
   const handleWidgetSelect = useCallback((type: WidgetType) => {
     onWidgetTypeChange(type)
     setWidgetMenuOpen(false)
-    // Reset candlestick-specific state when switching away
     indicatorInfoRef.current = null
     prevSelectedIdsKey.current = ''
     setIndicatorVersion(v => v + 1)
@@ -93,11 +90,9 @@ export function ChartPane({
     setChartStatus('connecting')
   }, [onWidgetTypeChange])
 
-  // Compute date range for macro dropdown (only relevant for candlestick)
   const isCandlestick = widgetType === 'candlestick'
   const controlsDisabled = isCandlestick && chartStatus !== 'connected' && chartStatus !== 'error'
 
-  // Resolve widget component
   const WidgetComponent = getWidgetComponent(widgetType)
 
   return (
@@ -153,19 +148,19 @@ export function ChartPane({
             )}
           </div>
 
-          {/* Symbol dropdown — only if widget needs a symbol */}
+          {/* Symbol dropdown */}
           {definition.needsSymbol && (
             <div onClick={e => e.stopPropagation()}>
               <TickerDropdown value={symbol} onChange={onSymbolChange} />
             </div>
           )}
 
-          {/* Interval selector — only if widget needs interval */}
+          {/* Interval selector */}
           {definition.needsInterval && (
             <PaneIntervalSelector value={interval} onChange={onIntervalChange} />
           )}
 
-          {/* Indicator chips + dropdown — only if widget supports indicators */}
+          {/* Indicator chips + dropdown */}
           {definition.supportsIndicators && indicatorInfo && (
             <>
               {indicatorInfo.selectedIds.length > 0 && (
@@ -181,7 +176,7 @@ export function ChartPane({
                         style={{ color: config.color }}
                         title={`Remove ${config.label}`}
                       >
-                        {config.label}
+                        {config.shortLabel}
                         <span className="text-[var(--text-tertiary)]">&times;</span>
                       </button>
                     )
@@ -193,14 +188,20 @@ export function ChartPane({
               )}
               <IndicatorsDropdown
                 indicators={indicatorInfo.availableIndicators}
+                categories={indicatorInfo.indicatorCategories}
                 selectedIds={indicatorInfo.selectedIds}
                 onToggle={indicatorInfo.toggleIndicator}
+                showVolume={indicatorInfo.showVolume}
+                onToggleVolume={indicatorInfo.toggleVolume}
+                customIndicators={indicatorInfo.customIndicators}
+                onAddCustom={indicatorInfo.addCustomIndicator}
+                onRemoveCustom={indicatorInfo.removeCustomIndicator}
                 disabled={controlsDisabled}
               />
             </>
           )}
 
-          {/* Compare dropdown — only for candlestick */}
+          {/* Compare dropdown */}
           {isCandlestick && (
             <div onClick={e => e.stopPropagation()}>
               <CompareDropdown
@@ -220,7 +221,6 @@ export function ChartPane({
               <LayoutSelector value={layoutValue} onChange={onLayoutChange} />
             </div>
           )}
-          {/* Connection dot — shows chart status for candlestick, green for placeholders */}
           <span className={`w-1.5 h-1.5 rounded-full ${
             isCandlestick
               ? (chartStatus === 'connected' ? 'bg-[var(--green-up)]' :

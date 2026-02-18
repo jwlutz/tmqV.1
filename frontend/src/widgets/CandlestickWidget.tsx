@@ -1,21 +1,26 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp } from 'lightweight-charts'
 import { useMarketData } from '../hooks'
-import { useIndicators, IndicatorData } from '../hooks/useIndicators'
+import { useIndicators } from '../hooks/useIndicators'
+import type { IndicatorResult, IndicatorConfig, CustomIndicator } from '../hooks/useIndicators'
 import { useMarketStats } from '../hooks/useMarketStats'
 import { useDataSettings } from '../context'
 import { LoadingOverlay } from '../components/ui'
 import { formatPrice, formatNumber } from '../hooks/useMarketStats'
 import { fetchOHLCV } from '../api/client'
 import type { MacroOverlay } from '../context'
-import type { IndicatorConfig } from '../hooks/useIndicators'
 
 export interface CandlestickIndicatorInfo {
   selectedIds: string[]
   availableIndicators: IndicatorConfig[]
+  indicatorCategories: Record<string, IndicatorConfig[]>
   toggleIndicator: (id: string) => void
-  activeIndicators: IndicatorData[]
-  dateRange: { start?: string; end?: string }
+  activeIndicators: IndicatorResult[]
+  showVolume: boolean
+  toggleVolume: () => void
+  customIndicators: CustomIndicator[]
+  addCustomIndicator: (indicator: CustomIndicator) => void
+  removeCustomIndicator: (id: string) => void
 }
 
 export interface CandlestickWidgetProps {
@@ -28,6 +33,9 @@ export interface CandlestickWidgetProps {
   onStatusChange?: (status: string) => void
   onIndicatorsReady?: (info: CandlestickIndicatorInfo) => void
 }
+
+// Plot color variants for multi-plot indicators
+const MULTI_PLOT_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4']
 
 export function CandlestickWidget({
   symbol,
@@ -76,12 +84,13 @@ export function CandlestickWidget({
     toggleIndicator,
     activeIndicators,
     availableIndicators,
-  } = useIndicators({
-    symbol,
-    interval,
-    startDate: dateRange.start,
-    endDate: dateRange.end,
-  })
+    indicatorCategories,
+    showVolume,
+    toggleVolume,
+    customIndicators,
+    addCustomIndicator,
+    removeCustomIndicator,
+  } = useIndicators({ candles })
 
   // Use refs for callbacks to avoid including them in effect deps
   const onIndicatorsReadyRef = useRef(onIndicatorsReady)
@@ -90,11 +99,15 @@ export function CandlestickWidget({
   onStatusChangeRef.current = onStatusChange
 
   // Bubble indicator info up to ChartPane for header chips/dropdown
-  // Called on every render so the ref in ChartPane always has fresh function references,
-  // but ChartPane only triggers re-render when selectedIds/dateRange change (via key comparison)
   useEffect(() => {
-    onIndicatorsReadyRef.current?.({ selectedIds, availableIndicators, toggleIndicator, activeIndicators, dateRange })
-  }, [selectedIds, availableIndicators, toggleIndicator, activeIndicators, dateRange])
+    onIndicatorsReadyRef.current?.({
+      selectedIds, availableIndicators, indicatorCategories, toggleIndicator,
+      activeIndicators, showVolume, toggleVolume,
+      customIndicators, addCustomIndicator, removeCustomIndicator,
+    })
+  }, [selectedIds, availableIndicators, indicatorCategories, toggleIndicator,
+      activeIndicators, showVolume, toggleVolume,
+      customIndicators, addCustomIndicator, removeCustomIndicator])
 
   // Bubble status up to ChartPane for connection dot
   useEffect(() => {
@@ -236,7 +249,11 @@ export function CandlestickWidget({
         }))
 
         candleSeriesRef.current.setData(chartCandles)
-        volumeSeriesRef.current.setData(chartVolume)
+        if (showVolume) {
+          volumeSeriesRef.current.setData(chartVolume)
+        } else {
+          volumeSeriesRef.current.setData([])
+        }
 
         if (!isPrepending) {
           chartRef.current?.timeScale().fitContent()
@@ -254,11 +271,13 @@ export function CandlestickWidget({
             open: lastCandle.open, high: lastCandle.high,
             low: lastCandle.low, close: lastCandle.close,
           })
-          volumeSeriesRef.current.update({
-            time: lastCandle.time as UTCTimestamp,
-            value: lastCandle.volume ?? 0,
-            color: lastCandle.close >= lastCandle.open ? '#22c55e80' : '#ef444480',
-          })
+          if (showVolume) {
+            volumeSeriesRef.current.update({
+              time: lastCandle.time as UTCTimestamp,
+              value: lastCandle.volume ?? 0,
+              color: lastCandle.close >= lastCandle.open ? '#22c55e80' : '#ef444480',
+            })
+          }
           lastCandleCountRef.current = candles.length
           lastTimeRef.current = lastCandle.time
         }
@@ -267,19 +286,42 @@ export function CandlestickWidget({
       console.warn('Chart update failed, will reset:', e)
       isResettingRef.current = true
     }
-  }, [candles])
+  }, [candles, showVolume])
+
+  // Toggle volume visibility
+  useEffect(() => {
+    if (chartDisposedRef.current || !volumeSeriesRef.current) return
+    if (!showVolume) {
+      try { volumeSeriesRef.current.setData([]) } catch { /* ignore */ }
+    } else if (candles.length > 0) {
+      const chartVolume = candles.map(c => ({
+        time: c.time as UTCTimestamp,
+        value: c.volume ?? 0,
+        color: c.close >= c.open ? '#22c55e80' : '#ef444480',
+      }))
+      try { volumeSeriesRef.current.setData(chartVolume) } catch { /* ignore */ }
+    }
+  }, [showVolume])
 
   // Update indicator series
   useEffect(() => {
     if (chartDisposedRef.current || !chartRef.current) return
     const chart = chartRef.current
 
-    // Remove deselected
+    // Build set of all series keys that should be active
+    const activeSeriesKeys = new Set<string>()
+    activeIndicators.forEach(result => {
+      for (const plotKey of Object.keys(result.plots)) {
+        activeSeriesKeys.add(`${result.config.id}:${plotKey}`)
+      }
+    })
+
+    // Remove deselected series
     const idsToRemove: string[] = []
-    indicatorSeriesRef.current.forEach((_series, id) => {
-      const baseId = id.split('-bb_')[0]
-      if (!selectedIds.includes(baseId) && !selectedIds.includes(id)) {
-        idsToRemove.push(id)
+    indicatorSeriesRef.current.forEach((_series, seriesKey) => {
+      const indicatorId = seriesKey.split(':')[0]
+      if (!selectedIds.includes(indicatorId) && !activeSeriesKeys.has(seriesKey)) {
+        idsToRemove.push(seriesKey)
       }
     })
     for (const id of idsToRemove) {
@@ -290,136 +332,76 @@ export function CandlestickWidget({
       indicatorSeriesRef.current.delete(id)
     }
 
-    // Add/update active
-    activeIndicators.forEach((indicator: IndicatorData) => {
+    // Add/update active indicators
+    activeIndicators.forEach((result: IndicatorResult) => {
       if (chartDisposedRef.current || !chart) return
-      const { config, points } = indicator
-      if (points.length === 0) return
+      const { config, plots } = result
+      const plotEntries = Object.entries(plots)
+      const isMultiPlot = plotEntries.length > 1
 
-      if (config.name === 'bbands') {
-        updateBollingerSeries(indicator)
-        return
-      }
+      plotEntries.forEach(([plotKey, points], plotIdx) => {
+        if (points.length === 0) return
+        const seriesKey = `${config.id}:${plotKey}`
 
-      let series = indicatorSeriesRef.current.get(config.id)
-      if (!series) {
-        try {
-          series = chart.addSeries(LineSeries, {
-            color: config.color,
-            lineWidth: 1,
-            priceScaleId: config.pane === 'separate' ? config.id : 'right',
-            lastValueVisible: false,
-            priceLineVisible: false,
-            ...(config.bounds && {
-              autoscaleInfoProvider: () => ({
-                priceRange: { minValue: config.bounds!.min, maxValue: config.bounds!.max },
+        let series = indicatorSeriesRef.current.get(seriesKey)
+        if (!series) {
+          try {
+            // For multi-plot indicators, cycle through colors
+            const plotColor = isMultiPlot
+              ? MULTI_PLOT_COLORS[plotIdx % MULTI_PLOT_COLORS.length]
+              : config.color
+
+            series = chart.addSeries(LineSeries, {
+              color: plotColor,
+              lineWidth: 1,
+              priceScaleId: config.pane === 'separate' ? config.id : 'right',
+              lastValueVisible: false,
+              priceLineVisible: false,
+              ...(config.bounds && {
+                autoscaleInfoProvider: () => ({
+                  priceRange: { minValue: config.bounds!.min, maxValue: config.bounds!.max },
+                }),
               }),
-            }),
-          })
-          if (config.pane === 'separate') {
-            series.priceScale().applyOptions({
-              scaleMargins: { top: 0.8, bottom: 0.02 },
             })
-          }
-          if (config.levels) {
-            config.levels.forEach(level => {
-              series!.createPriceLine({
-                price: level,
-                color: 'rgba(255, 255, 255, 0.3)',
-                lineWidth: 1,
-                lineStyle: 2,
-                axisLabelVisible: true,
-                title: '',
+            if (config.pane === 'separate') {
+              series.priceScale().applyOptions({
+                scaleMargins: { top: 0.8, bottom: 0.02 },
               })
-            })
+            }
+            // Only add levels for the first plot of an indicator
+            if (plotIdx === 0 && config.levels) {
+              config.levels.forEach(level => {
+                series!.createPriceLine({
+                  price: level,
+                  color: 'rgba(255, 255, 255, 0.3)',
+                  lineWidth: 1,
+                  lineStyle: 2,
+                  axisLabelVisible: true,
+                  title: '',
+                })
+              })
+            }
+            indicatorSeriesRef.current.set(seriesKey, series)
+          } catch (e) {
+            console.warn(`Failed to create indicator series for ${seriesKey}:`, e)
+            return
           }
-          indicatorSeriesRef.current.set(config.id, series)
-        } catch (e) {
-          console.warn(`Failed to create indicator series for ${config.id}:`, e)
-          return
         }
-      }
 
-      const valueKey = getValueKey(config.name)
-      const seriesData = points
-        .filter(p => p[valueKey] !== undefined && p[valueKey] !== null)
-        .map(p => ({
-          time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
-          value: Number(p[valueKey]),
-        }))
-        .sort((a, b) => a.time - b.time)
-        .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
+        // Sort and deduplicate
+        const seriesData = points
+          .sort((a, b) => a.time - b.time)
+          .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
+          .map(p => ({ time: p.time as UTCTimestamp, value: p.value }))
 
-      if (seriesData.length > 0) {
-        try { series.setData(seriesData) } catch (e) {
-          console.warn(`Failed to set indicator data for ${config.id}:`, e)
+        if (seriesData.length > 0) {
+          try { series.setData(seriesData) } catch (e) {
+            console.warn(`Failed to set indicator data for ${seriesKey}:`, e)
+          }
         }
-      }
+      })
     })
   }, [activeIndicators, selectedIds])
-
-  function getValueKey(indicatorName: string): string {
-    switch (indicatorName) {
-      case 'ema': return 'ema'
-      case 'sma': return 'sma'
-      case 'rsi': return 'rsi'
-      case 'macd': return 'macd'
-      case 'stoch': return 'stoch_k'
-      case 'atr': return 'atr'
-      case 'adx': return 'adx'
-      case 'vwap': return 'vwap'
-      case 'obv': return 'obv'
-      default: return 'value'
-    }
-  }
-
-  function updateBollingerSeries(indicator: IndicatorData) {
-    if (chartDisposedRef.current || !chartRef.current) return
-    const { config, points } = indicator
-    if (points.length === 0) return
-
-    const chart = chartRef.current
-    const bandKeys = ['bb_upper', 'bb_mid', 'bb_lower'] as const
-    const bandColors = [config.color, config.color + '80', config.color]
-
-    bandKeys.forEach((key, idx) => {
-      if (chartDisposedRef.current) return
-      const seriesId = `${config.id}-${key}`
-      let series = indicatorSeriesRef.current.get(seriesId)
-
-      if (!series) {
-        try {
-          series = chart.addSeries(LineSeries, {
-            color: bandColors[idx],
-            lineWidth: 1,
-            lineStyle: idx === 1 ? 2 : 0,
-            priceScaleId: 'right',
-            lastValueVisible: false,
-            priceLineVisible: false,
-          })
-          indicatorSeriesRef.current.set(seriesId, series)
-        } catch (e) {
-          console.warn(`Failed to create Bollinger band series:`, e)
-          return
-        }
-      }
-
-      const seriesData = points
-        .filter(p => p[key] !== undefined)
-        .map(p => ({
-          time: Math.floor(new Date(p.date).getTime() / 1000) as UTCTimestamp,
-          value: Number(p[key]),
-        }))
-        .sort((a, b) => a.time - b.time)
-        .filter((item, idx, arr) => idx === arr.length - 1 || item.time !== arr[idx + 1].time)
-
-      if (seriesData.length > 0) {
-        try { series.setData(seriesData) } catch (e) {
-          console.warn(`Failed to set Bollinger band data:`, e)
-        }
-      }
-    })
-  }
 
   // Lazy load more history
   useEffect(() => {

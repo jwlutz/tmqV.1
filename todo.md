@@ -11,7 +11,7 @@
     - MCP needs to respond
     - error handling
 - make volume a toggle/indicator!!
-- get AI contextually aware of what the user's pane looks like
+[x] get AI contextually aware of what the user's pane looks like
 - give AI ability to change the screens
 - ability to turn indicators on and off (and compare mode)
 - custom code vision and execution ability
@@ -30,8 +30,8 @@ QOL:
 - make sure MCP can also open and close windows
 - MCP should also be able to switch chart to different windows
 - keep chart window modular
-- remove AI artifacts (live, green dot, remove emojis)
-- turn quick actions to examples
+[x] remove AI artifacts (live, green dot, remove emojis)
+[x] turn quick actions to examples
 
 backtester code functions
 - for indicators: 

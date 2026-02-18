@@ -1,3 +1,4 @@
+// @ts-nocheck — Legacy component, replaced by ChartPane
 import { IndicatorConfig } from '../../hooks/useIndicators'
 import { MarketStats } from '../../api/client'
 import { formatNumber, formatPrice } from '../../hooks/useMarketStats'

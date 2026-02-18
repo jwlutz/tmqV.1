@@ -37,6 +37,7 @@ def build_system_prompt(env: dict) -> str:
         "Use ISO 8601 dates (YYYY-MM-DD) for tool parameters",
         "Resolve relative dates using the current datetime",
         "Keep responses concise",
+        "Format tables using markdown: | Col1 | Col2 |\\n|------|------|\\n| val | val |",
     ]
 
     prompt = f"""<role>

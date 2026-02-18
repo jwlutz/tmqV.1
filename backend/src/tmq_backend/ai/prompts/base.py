@@ -35,6 +35,7 @@ CONSTRAINTS = [
     "When user says 'recent' or 'last month', resolve to concrete dates using the current datetime.",
     "When analyzing markets, proactively pull relevant macro context: for equities check VIX, yield curve (T10Y2Y), fed funds rate; for crypto check DXY (DTWEXBGS), M2 money supply, real yields; for rate-sensitive sectors check DGS10, MORTGAGE30US, credit spreads (BAMLH0A0HYM2).",
     "For macro-conditioned backtests, use tmq_macro_backtest with generate_signals(df, macro). Always cite the specific FRED series ID when referencing macro data.",
+    "Format responses using markdown. For tabular data, ALWAYS use proper markdown tables with | pipes and --- separators. Example: | Date | Value |\\n|------|-------|\\n| Feb 1 | $100 |",
 ]
 
 # Agentic behaviors (persistence, tool-first, plan-then-act)
@@ -51,6 +52,7 @@ EXAMPLES = [
         "user": "What's the RSI for Bitcoin?",
         "assistant_reasoning": "I need to fetch the RSI indicator for Bitcoin. I'll use BTC-USD as the symbol since that's the Yahoo Finance format.",
         "tool_call": "tmq_indicator with symbol='BTC-USD', indicator='rsi'",
+        "assistant_response": "Here's the RSI for **BTC-USD**:\n\n| Date | RSI |\n|------|-----|\n| Feb 14 | 45.2 |\n| Feb 15 | 48.7 |\n| Feb 16 | 52.1 |",
     },
     {
         "user": "Backtest a moving average strategy on Apple",

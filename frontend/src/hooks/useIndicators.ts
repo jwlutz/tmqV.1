@@ -1,160 +1,254 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchIndicator, IndicatorDataPoint } from '../api/client';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { indicatorRegistry } from 'lightweight-charts-indicators'
+import type { Bar } from 'oakscriptjs'
+import type { Candle } from './useMarketData'
+
+// ── Types ──────────────────────────────────────────────────────────────
 
 export interface IndicatorConfig {
-  id: string;           // unique key like 'ema-20'
-  name: string;         // indicator name for API: 'ema', 'rsi', etc.
-  label: string;        // display label: 'EMA 20'
-  color: string;        // line color
-  params: Record<string, number>;
-  pane?: 'main' | 'separate'; // 'separate' for RSI, Stoch, etc.
-  bounds?: { min: number; max: number }; // y-axis bounds for oscillators
-  levels?: number[];    // horizontal reference lines (e.g., [30, 70] for RSI)
+  id: string           // registry id like 'sma', 'rsi', 'macd'
+  label: string        // display name from the registry
+  shortLabel: string   // short name e.g. 'SMA'
+  category: string     // 'Moving Averages', 'Oscillators', etc.
+  color: string        // assigned line color
+  overlay: boolean     // true = overlay on price, false = separate pane
+  pane: 'main' | 'separate'
+  bounds?: { min: number; max: number }
+  levels?: number[]
+  inputConfig: unknown  // raw input config from registry for custom params
+  defaultInputs: Record<string, unknown>
 }
 
-export const AVAILABLE_INDICATORS: IndicatorConfig[] = [
-  // Moving Averages (overlay on price)
-  { id: 'ema-12', name: 'ema', label: 'EMA 12', color: '#22c55e', params: { length: 12 }, pane: 'main' },
-  { id: 'ema-20', name: 'ema', label: 'EMA 20', color: '#f59e0b', params: { length: 20 }, pane: 'main' },
-  { id: 'ema-26', name: 'ema', label: 'EMA 26', color: '#ef4444', params: { length: 26 }, pane: 'main' },
-  { id: 'ema-50', name: 'ema', label: 'EMA 50', color: '#8b5cf6', params: { length: 50 }, pane: 'main' },
-  { id: 'ema-200', name: 'ema', label: 'EMA 200', color: '#06b6d4', params: { length: 200 }, pane: 'main' },
-  { id: 'sma-20', name: 'sma', label: 'SMA 20', color: '#3b82f6', params: { length: 20 }, pane: 'main' },
-  { id: 'sma-50', name: 'sma', label: 'SMA 50', color: '#0ea5e9', params: { length: 50 }, pane: 'main' },
-  { id: 'sma-200', name: 'sma', label: 'SMA 200', color: '#ef4444', params: { length: 200 }, pane: 'main' },
-  { id: 'vwap', name: 'vwap', label: 'VWAP', color: '#14b8a6', params: {}, pane: 'main' },
-
-  // Bands & Channels (overlay on price)
-  { id: 'bbands', name: 'bbands', label: 'Bollinger', color: '#6366f1', params: { length: 20, std: 2 }, pane: 'main' },
-  { id: 'kc', name: 'kc', label: 'Keltner', color: '#f97316', params: { length: 20, scalar: 2 }, pane: 'main' },
-  { id: 'donchian', name: 'donchian', label: 'Donchian', color: '#10b981', params: { lower_length: 20, upper_length: 20 }, pane: 'main' },
-
-  // Trend Overlays
-  { id: 'supertrend', name: 'supertrend', label: 'SuperTrend', color: '#22c55e', params: { length: 7, multiplier: 3.0 }, pane: 'main' },
-  { id: 'psar', name: 'psar', label: 'Parabolic SAR', color: '#fbbf24', params: { af0: 0.02, af: 0.02, max_af: 0.2 }, pane: 'main' },
-  { id: 'ichimoku', name: 'ichimoku', label: 'Ichimoku', color: '#ec4899', params: { tenkan: 9, kijun: 26, senkou: 52 }, pane: 'main' },
-
-  // Bounded Oscillators (0-100)
-  { id: 'rsi-7', name: 'rsi', label: 'RSI 7', color: '#f43f5e', params: { length: 7 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [30, 70] },
-  { id: 'rsi-14', name: 'rsi', label: 'RSI 14', color: '#ec4899', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [30, 70] },
-  { id: 'mfi-14', name: 'mfi', label: 'MFI', color: '#10b981', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [20, 80] },
-  { id: 'stoch', name: 'stoch', label: 'Stochastic', color: '#f97316', params: { k: 14, d: 3 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [20, 80] },
-  { id: 'stochrsi', name: 'stochrsi', label: 'Stoch RSI', color: '#8b5cf6', params: { length: 14, rsi_length: 14, k: 3, d: 3 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [20, 80] },
-  { id: 'willr', name: 'willr', label: 'Williams %R', color: '#a855f7', params: { length: 14 }, pane: 'separate', bounds: { min: -100, max: 0 }, levels: [-20, -80] },
-  { id: 'adx-14', name: 'adx', label: 'ADX', color: '#06b6d4', params: { length: 14 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [25, 50] },
-  { id: 'aroon', name: 'aroon', label: 'Aroon', color: '#14b8a6', params: { length: 25 }, pane: 'separate', bounds: { min: 0, max: 100 }, levels: [30, 70] },
-
-  // Unbounded Oscillators (auto-scale)
-  { id: 'macd', name: 'macd', label: 'MACD', color: '#14b8a6', params: {}, pane: 'separate', levels: [0] },
-  { id: 'ppo', name: 'ppo', label: 'PPO', color: '#8b5cf6', params: { fast: 12, slow: 26, signal: 9 }, pane: 'separate', levels: [0] },
-  { id: 'cci-20', name: 'cci', label: 'CCI', color: '#f43f5e', params: { length: 20 }, pane: 'separate', levels: [-100, 100] },
-  { id: 'cmf-20', name: 'cmf', label: 'CMF', color: '#22c55e', params: { length: 20 }, pane: 'separate', levels: [0] },
-  { id: 'roc-10', name: 'roc', label: 'ROC', color: '#f59e0b', params: { length: 10 }, pane: 'separate', levels: [0] },
-  { id: 'trix', name: 'trix', label: 'TRIX', color: '#6366f1', params: { length: 18 }, pane: 'separate', levels: [0] },
-  { id: 'atr-14', name: 'atr', label: 'ATR', color: '#eab308', params: { length: 14 }, pane: 'separate' },
-  { id: 'obv', name: 'obv', label: 'OBV', color: '#64748b', params: {}, pane: 'separate' },
-];
-
-export interface IndicatorData {
-  config: IndicatorConfig;
-  points: IndicatorDataPoint[];
-  loading: boolean;
-  error: string | null;
+export interface IndicatorPlotPoint {
+  time: number
+  value: number
 }
+
+export interface IndicatorResult {
+  config: IndicatorConfig
+  plots: Record<string, IndicatorPlotPoint[]>  // plotId → data points
+}
+
+// ── Constants ──────────────────────────────────────────────────────────
+
+// Color palette for auto-assigning indicator colors
+const INDICATOR_COLORS = [
+  '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#ec4899', '#f97316', '#14b8a6', '#6366f1',
+  '#a855f7', '#eab308', '#0ea5e9', '#f43f5e', '#10b981',
+  '#64748b', '#fbbf24', '#84cc16', '#e879f9', '#fb923c',
+]
+
+// Known bounded oscillators (0-100 or similar)
+const BOUNDED_INDICATORS: Record<string, { bounds: { min: number; max: number }; levels: number[] }> = {
+  rsi: { bounds: { min: 0, max: 100 }, levels: [30, 70] },
+  stochastic: { bounds: { min: 0, max: 100 }, levels: [20, 80] },
+  stochrsi: { bounds: { min: 0, max: 100 }, levels: [20, 80] },
+  mfi: { bounds: { min: 0, max: 100 }, levels: [20, 80] },
+  williamspercentrange: { bounds: { min: -100, max: 0 }, levels: [-20, -80] },
+  adx: { bounds: { min: 0, max: 100 }, levels: [25, 50] },
+  aroon: { bounds: { min: 0, max: 100 }, levels: [30, 70] },
+  chandemo: { bounds: { min: -100, max: 100 }, levels: [-50, 50] },
+  ultimateoscillator: { bounds: { min: 0, max: 100 }, levels: [30, 70] },
+  fishertransform: { bounds: { min: -4, max: 4 }, levels: [-1, 1] },
+}
+
+// Indicators with zero-line reference
+const ZERO_LINE_INDICATORS = new Set([
+  'macd', 'momentum', 'roc', 'bop', 'priceoscillator',
+  'coppockcurve', 'trix', 'elderforceindex', 'cci',
+  'chaikinmf', 'chaikinoscillator', 'easeofmovement',
+  'klingeroscillator', 'volumeoscillator', 'ppo',
+  'bbpercentb', 'bbbandwidth',
+])
+
+// ── Build registry ─────────────────────────────────────────────────────
+
+function buildAvailableIndicators(): IndicatorConfig[] {
+  let colorIdx = 0
+  return indicatorRegistry.map(ind => {
+    const color = INDICATOR_COLORS[colorIdx % INDICATOR_COLORS.length]
+    colorIdx++
+
+    const pane: 'main' | 'separate' = ind.overlay ? 'main' : 'separate'
+    const bounded = BOUNDED_INDICATORS[ind.id]
+    const hasZeroLine = ZERO_LINE_INDICATORS.has(ind.id)
+
+    return {
+      id: ind.id,
+      label: ind.name,
+      shortLabel: ind.shortName,
+      category: ind.category,
+      color,
+      overlay: ind.overlay,
+      pane,
+      bounds: bounded ? bounded.bounds : undefined,
+      levels: bounded ? bounded.levels : (hasZeroLine ? [0] : undefined),
+      inputConfig: ind.inputConfig,
+      defaultInputs: ind.defaultInputs,
+    }
+  })
+}
+
+export const AVAILABLE_INDICATORS = buildAvailableIndicators()
+
+// Group indicators by category (computed once)
+export const INDICATOR_CATEGORIES = AVAILABLE_INDICATORS.reduce<Record<string, IndicatorConfig[]>>(
+  (acc, ind) => {
+    if (!acc[ind.category]) acc[ind.category] = []
+    acc[ind.category].push(ind)
+    return acc
+  }, {}
+)
+
+// ── Convert candles to bars ────────────────────────────────────────────
+
+function candlesToBars(candles: Candle[]): Bar[] {
+  return candles.map(c => ({
+    time: c.time,
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+    volume: c.volume ?? 0,
+  }))
+}
+
+// ── Custom indicator support ───────────────────────────────────────────
+
+export interface CustomIndicator {
+  id: string
+  label: string
+  color: string
+  code: string // JS function body: (bars) => [{time, value}]
+}
+
+// ── Hook ───────────────────────────────────────────────────────────────
 
 export interface UseIndicatorsOptions {
-  symbol: string;
-  interval?: string;
-  startDate?: string;
-  endDate?: string;
+  candles: Candle[]
 }
 
-// Convert symbol format: BTC-USD (frontend/Coinbase) → BTC/USD (backend/CCXT)
-function toApiSymbol(symbol: string): string {
-  return symbol.replace('-', '/');
-}
+export function useIndicators({ candles }: UseIndicatorsOptions) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [showVolume, setShowVolume] = useState(true)
+  const [customIndicators, setCustomIndicators] = useState<CustomIndicator[]>([])
+  const prevCandleKeyRef = useRef('')
 
-export function useIndicators({ symbol, interval = '1d', startDate, endDate }: UseIndicatorsOptions) {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [indicatorData, setIndicatorData] = useState<Map<string, IndicatorData>>(new Map());
-  const fetchingRef = useRef<Set<string>>(new Set());
-  const apiSymbol = toApiSymbol(symbol);
+  // Memoize bars conversion
+  const bars = useMemo(() => candlesToBars(candles), [candles])
 
-  // Toggle an indicator on/off
+  // Compute indicator results for all selected indicators
+  const indicatorResults = useMemo<IndicatorResult[]>(() => {
+    if (bars.length === 0) return []
+
+    return selectedIds.map(id => {
+      const config = AVAILABLE_INDICATORS.find(i => i.id === id)
+      if (!config) return null
+
+      const registryEntry = indicatorRegistry.find(i => i.id === id)
+      if (!registryEntry) return null
+
+      try {
+        const result = registryEntry.calculate(bars, registryEntry.defaultInputs)
+        const plots: Record<string, IndicatorPlotPoint[]> = {}
+
+        // Convert each plot from the result
+        for (const [plotKey, plotData] of Object.entries(result.plots)) {
+          if (!Array.isArray(plotData)) continue
+          const points: IndicatorPlotPoint[] = []
+          for (let i = 0; i < plotData.length; i++) {
+            const val = (plotData[i] as { value: number }).value
+            if (val !== undefined && !isNaN(val) && bars[i]) {
+              points.push({ time: bars[i].time as number, value: val })
+            }
+          }
+          plots[plotKey] = points
+        }
+
+        return { config, plots } as IndicatorResult
+      } catch (e) {
+        console.warn(`Failed to compute indicator ${id}:`, e)
+        return null
+      }
+    }).filter((r): r is IndicatorResult => r !== null)
+  }, [selectedIds, bars])
+
+  // Compute custom indicator results
+  const customResults = useMemo<IndicatorResult[]>(() => {
+    if (bars.length === 0 || customIndicators.length === 0) return []
+
+    return customIndicators.map(custom => {
+      try {
+        // Create a safe function from the user's code
+        const fn = new Function('bars', custom.code) as (bars: Bar[]) => Array<{ time: number; value: number }>
+        const values = fn(bars)
+
+        if (!Array.isArray(values)) return null
+
+        const config: IndicatorConfig = {
+          id: custom.id,
+          label: custom.label,
+          shortLabel: custom.label,
+          category: 'Custom',
+          color: custom.color,
+          overlay: false,
+          pane: 'separate',
+          inputConfig: null,
+          defaultInputs: {},
+        }
+
+        const points = values
+          .filter(v => v && typeof v.time === 'number' && typeof v.value === 'number' && !isNaN(v.value))
+          .map(v => ({ time: v.time, value: v.value }))
+
+        const plots: Record<string, IndicatorPlotPoint[]> = { plot0: points }
+        return { config, plots } as IndicatorResult
+      } catch (e) {
+        console.warn(`Custom indicator "${custom.label}" failed:`, e)
+        return null
+      }
+    }).filter(Boolean) as IndicatorResult[]
+  }, [customIndicators, bars])
+
+  // All active results (built-in + custom)
+  const activeIndicators = useMemo(() => {
+    return [...indicatorResults, ...customResults]
+  }, [indicatorResults, customResults])
+
+  // Reset selections when candles change significantly (new symbol)
+  useEffect(() => {
+    const key = candles.length > 0
+      ? `${candles[0].time}-${candles[candles.length - 1].time}-${candles.length}`
+      : ''
+    // Only reset if the data source changes completely (different time range)
+    if (prevCandleKeyRef.current && key && key !== prevCandleKeyRef.current) {
+      // Don't clear selections — just let them recompute with new data
+    }
+    prevCandleKeyRef.current = key
+  }, [candles])
+
   const toggleIndicator = useCallback((id: string) => {
     setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  }, []);
+    )
+  }, [])
 
-  // Clear all indicators
   const clearIndicators = useCallback(() => {
-    setSelectedIds([]);
-    setIndicatorData(new Map());
-  }, []);
+    setSelectedIds([])
+  }, [])
 
-  // Fetch data for selected indicators
-  useEffect(() => {
-    if (!apiSymbol || !startDate || !endDate) return;
+  const toggleVolume = useCallback(() => {
+    setShowVolume(prev => !prev)
+  }, [])
 
-    selectedIds.forEach(async (id) => {
-      // Skip if already fetching
-      if (fetchingRef.current.has(id)) return;
-      // Skip if we already have data or already encountered an error
-      const existing = indicatorData.get(id);
-      if (existing && (existing.points.length > 0 || existing.error)) return;
+  const addCustomIndicator = useCallback((indicator: CustomIndicator) => {
+    setCustomIndicators(prev => [...prev, indicator])
+  }, [])
 
-      const config = AVAILABLE_INDICATORS.find(i => i.id === id);
-      if (!config) return;
-
-      fetchingRef.current.add(id);
-      setIndicatorData(prev => new Map(prev).set(id, {
-        config,
-        points: [],
-        loading: true,
-        error: null,
-      }));
-
-      try {
-        const result = await fetchIndicator(
-          apiSymbol,
-          config.name,
-          interval,
-          startDate,
-          endDate,
-          config.params
-        );
-
-        setIndicatorData(prev => new Map(prev).set(id, {
-          config,
-          points: result.data,
-          loading: false,
-          error: null,
-        }));
-      } catch (err) {
-        setIndicatorData(prev => new Map(prev).set(id, {
-          config,
-          points: [],
-          loading: false,
-          error: err instanceof Error ? err.message : 'Failed to fetch indicator',
-        }));
-      } finally {
-        fetchingRef.current.delete(id);
-      }
-    });
-    // Note: indicatorData intentionally excluded to prevent infinite loops
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIds, apiSymbol, interval, startDate, endDate]);
-
-  // Clear cached data when symbol or interval changes
-  useEffect(() => {
-    setIndicatorData(new Map());
-  }, [symbol, interval]);
-
-  // Get active indicator data (selected + loaded)
-  const activeIndicators = Array.from(indicatorData.values()).filter(
-    d => selectedIds.includes(d.config.id) && d.points.length > 0
-  );
+  const removeCustomIndicator = useCallback((id: string) => {
+    setCustomIndicators(prev => prev.filter(i => i.id !== id))
+  }, [])
 
   return {
     selectedIds,
@@ -162,6 +256,12 @@ export function useIndicators({ symbol, interval = '1d', startDate, endDate }: U
     clearIndicators,
     activeIndicators,
     availableIndicators: AVAILABLE_INDICATORS,
-    isLoading: Array.from(indicatorData.values()).some(d => d.loading),
-  };
+    indicatorCategories: INDICATOR_CATEGORIES,
+    isLoading: false, // client-side = always synchronous
+    showVolume,
+    toggleVolume,
+    customIndicators,
+    addCustomIndicator,
+    removeCustomIndicator,
+  }
 }

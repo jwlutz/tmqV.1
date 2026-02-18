@@ -1,4 +1,5 @@
 import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Message } from './types';
 
 interface ChatMessageProps {
@@ -39,8 +40,11 @@ export function ChatMessage({ message }: ChatMessageProps) {
                           prose-headings:mt-2 prose-headings:mb-1
                           prose-code:bg-black/20 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
                           prose-pre:bg-black/30 prose-pre:p-2 prose-pre:rounded-lg
-                          prose-strong:text-[var(--text-primary)]">
-            <Markdown>{message.content}</Markdown>
+                          prose-strong:text-[var(--text-primary)]
+                          prose-table:border-collapse prose-table:text-xs
+                          prose-th:bg-black/30 prose-th:px-2 prose-th:py-1 prose-th:border prose-th:border-white/10
+                          prose-td:px-2 prose-td:py-1 prose-td:border prose-td:border-white/10">
+            <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
           </div>
         )}
         <span className={`text-xs mt-1 block ${
