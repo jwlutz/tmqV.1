@@ -8,6 +8,13 @@ from tmq_backend.config import get_api_key, get_configured_providers
 router = APIRouter(prefix="/api")
 
 
+class ChartContext(BaseModel):
+    """Current chart state for AI context awareness."""
+    symbol: str | None = None
+    interval: str | None = None
+    widget_type: str | None = None
+
+
 class ChatRequest(BaseModel):
     messages: list[dict]
     model: str = "gpt-4o-mini"
@@ -16,6 +23,8 @@ class ChatRequest(BaseModel):
     # Custom API key (overrides server-side key if provided)
     api_key: str | None = None
     use_openrouter: bool = False
+    # Current chart context for state-aware responses
+    context: ChartContext | None = None
 
 
 @router.post("/chat")
@@ -40,12 +49,22 @@ async def chat(request: ChatRequest):
             detail="No API key provided. Either set 'api_key' or 'provider' field."
         )
 
+    # Build context dict for chat_stream
+    context_dict = None
+    if request.context:
+        context_dict = {
+            "symbol": request.context.symbol,
+            "interval": request.context.interval,
+            "widget_type": request.context.widget_type,
+        }
+
     return StreamingResponse(
         chat_stream(
             request.messages,
             api_key,
             request.model,
             use_openrouter=request.use_openrouter,
+            context=context_dict,
         ),
         media_type="text/event-stream",
     )

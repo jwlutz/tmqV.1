@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { Message } from '../components/chat/types';
-import { streamChat } from '../api/client';
+import { streamChat, ChatContext } from '../api/client';
 import { APIBacktestResult } from '../context';
 
 export interface UseChatOptions {
@@ -10,6 +10,8 @@ export interface UseChatOptions {
   serverProvider?: string | null;  // null = use custom apiKey
   onBacktestResult?: (result: APIBacktestResult) => void;
   onCustomCode?: (code: string) => void;
+  /** Current chart context (symbol, interval) for state-aware AI */
+  context?: ChatContext;
 }
 
 interface UseChatReturn {
@@ -31,7 +33,7 @@ const WELCOME_MESSAGE: Message = {
   timestamp: new Date(),
 };
 
-export function useChat({ apiKey, model, useOpenRouter = false, serverProvider = null, onBacktestResult, onCustomCode }: UseChatOptions): UseChatReturn {
+export function useChat({ apiKey, model, useOpenRouter = false, serverProvider = null, onBacktestResult, onCustomCode, context }: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [isTyping, setIsTyping] = useState(false);
   const historyRef = useRef<Array<{ role: string; content: string }>>([]);
@@ -39,6 +41,9 @@ export function useChat({ apiKey, model, useOpenRouter = false, serverProvider =
   onBacktestResultRef.current = onBacktestResult;
   const onCustomCodeRef = useRef(onCustomCode);
   onCustomCodeRef.current = onCustomCode;
+  // Store context in ref to avoid stale closures but keep it current
+  const contextRef = useRef(context);
+  contextRef.current = context;
 
   // Determine if we have a valid key (either custom or server provider)
   const hasValidKey = serverProvider || apiKey;
@@ -83,7 +88,7 @@ export function useChat({ apiKey, model, useOpenRouter = false, serverProvider =
       // Use server provider or custom API key
       const keyOrProvider = serverProvider || apiKey;
       const isServer = !!serverProvider;
-      for await (const event of streamChat(historyRef.current, keyOrProvider, model, useOpenRouter, isServer)) {
+      for await (const event of streamChat(historyRef.current, keyOrProvider, model, useOpenRouter, isServer, contextRef.current)) {
         switch (event.type) {
           case 'text':
             if (event.content) {
@@ -133,6 +138,18 @@ export function useChat({ apiKey, model, useOpenRouter = false, serverProvider =
                   console.warn('Could not parse backtest result from tool_result');
                 }
               }
+            }
+            break;
+
+          case 'error':
+            // Handle error events from the backend
+            if (event.content) {
+              const errorMsg = event.content;
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId
+                  ? { ...m, content: fullContent ? `${fullContent}\n\n**Error:** ${errorMsg}` : `Error: ${errorMsg}`, toolStatus: undefined }
+                  : m
+              ));
             }
             break;
 

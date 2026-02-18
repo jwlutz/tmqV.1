@@ -271,11 +271,17 @@ export async function fetchConfig(): Promise<ServerConfig> {
 }
 
 export interface ChatSSEEvent {
-  type: "text" | "tool_call" | "tool_result" | "done";
+  type: "text" | "tool_call" | "tool_result" | "error" | "done";
   content?: string;
   name?: string;
   args?: Record<string, unknown>;
   result?: string;
+}
+
+export interface ChatContext {
+  symbol?: string;
+  interval?: string;
+  widgetType?: string;
 }
 
 export interface ChatOptions {
@@ -284,6 +290,7 @@ export interface ChatOptions {
   provider?: string;  // Server-side provider (anthropic, openrouter, etc.)
   model: string;
   useOpenRouter?: boolean;
+  context?: ChatContext;
 }
 
 export async function* streamChat(
@@ -291,7 +298,8 @@ export async function* streamChat(
   apiKeyOrProvider: string,
   model: string = "gpt-4o-mini",
   useOpenRouter: boolean = false,
-  isServerProvider: boolean = false
+  isServerProvider: boolean = false,
+  context?: ChatContext
 ): AsyncGenerator<ChatSSEEvent> {
   const body: Record<string, unknown> = {
     messages,
@@ -305,6 +313,15 @@ export async function* streamChat(
   } else {
     // Use custom API key
     body.api_key = apiKeyOrProvider;
+  }
+
+  // Add chart context if available
+  if (context) {
+    body.context = {
+      symbol: context.symbol,
+      interval: context.interval,
+      widget_type: context.widgetType,
+    };
   }
 
   const res = await fetch(`${BASE_URL}/api/chat`, {

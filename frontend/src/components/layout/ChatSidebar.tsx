@@ -1,7 +1,17 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { useBacktest, useChatSettings, useCodePanel } from '../../context';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useBacktest, useChatSettings, useCodePanel, useChartLayout, useInterval } from '../../context';
 import { useChat } from '../../hooks';
 import { ChatMessage, ChatInput, QuickActions, TypingIndicator } from '../chat';
+import { ChatContext } from '../../api/client';
+
+// Default models for each provider (must match litellm model names)
+const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
+  anthropic: 'claude-haiku-4-5-20251001',
+  openai: 'gpt-4o-mini',
+  google: 'gemini-2.0-flash',
+  xai: 'grok-2',
+  openrouter: 'anthropic/claude-haiku-4.5',
+};
 
 export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
   const { setBacktestResult } = useBacktest();
@@ -11,13 +21,29 @@ export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
     selectedServerProvider
   } = useChatSettings();
 
+  // Get active pane context for state-aware AI
+  const { panes, activePaneId } = useChartLayout();
+  const { interval } = useInterval();
+  const activePane = panes.find(p => p.id === activePaneId);
+
+  // Build chat context from active pane state
+  const chatContext: ChatContext = useMemo(() => ({
+    symbol: activePane?.symbol,
+    interval: interval,
+    widgetType: activePane?.widgetType,
+  }), [activePane?.symbol, activePane?.widgetType, interval]);
+
   // Compute effective API key and model based on provider selection
-  // If server provider is selected, apiKey is ignored (server-side key used)
+  // If server provider is selected, use the provider's default model
   const effectiveApiKey = useOpenRouter ? openRouterApiKey : apiKey;
-  const effectiveModel = (selectedServerProvider === 'openrouter' || useOpenRouter)
-    ? openRouterModel
-    : model;
   const effectiveUseOpenRouter = selectedServerProvider === 'openrouter' || useOpenRouter;
+
+  // CRITICAL: Use provider-appropriate model, not the stored model which may be for a different provider
+  const effectiveModel = effectiveUseOpenRouter
+    ? openRouterModel
+    : (selectedServerProvider
+        ? PROVIDER_DEFAULT_MODELS[selectedServerProvider] || model
+        : model);
 
   const { setCodePanelOpen, setSandboxCode } = useCodePanel();
   const [isOpen, setIsOpen] = useState(true);
@@ -35,6 +61,7 @@ export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
     serverProvider: selectedServerProvider,
     onBacktestResult: setBacktestResult,
     onCustomCode: handleCustomCode,
+    context: chatContext,
   });
 
   // Auto-scroll to bottom on new messages

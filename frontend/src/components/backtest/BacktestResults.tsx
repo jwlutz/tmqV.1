@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { KPIGrid } from './KPIGrid';
-import { EquityCurveChart, OHLCVPoint } from './EquityCurveChart';
+import { EquityCurveChart, OHLCVPoint, ChartDisplayOptions } from './EquityCurveChart';
 import { useBacktest, useInterval } from '../../context';
 import { BacktestKPIs, EquityPoint } from './types';
 import { fetchOHLCV } from '../../api/client';
 import type { APIBacktestResult } from '../../context';
+import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 function mapKPIs(metrics: APIBacktestResult['metrics']): BacktestKPIs {
   return {
@@ -30,6 +31,13 @@ export function BacktestResults() {
   const { backtestResult } = useBacktest();
   const { interval } = useInterval();
   const [ohlcv, setOhlcv] = useState<OHLCVPoint[]>([]);
+
+  // Display toggles (persisted)
+  const [showPrice, setShowPrice] = useLocalStorage('backtest.showPrice', true);
+  const [showEquity, setShowEquity] = useLocalStorage('backtest.showEquity', true);
+  const [showTrades, setShowTrades] = useLocalStorage('backtest.showTrades', true);
+
+  const displayOptions: ChartDisplayOptions = { showPrice, showEquity, showTrades };
 
   // Fetch OHLCV data when backtest result changes
   useEffect(() => {
@@ -94,7 +102,37 @@ export function BacktestResults() {
             {backtestResult.symbol} &middot; {startDate} to {endDate}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-4">
+          {/* Display toggles */}
+          <div className="flex items-center gap-3 text-xs">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showPrice}
+                onChange={e => setShowPrice(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-[var(--border)] bg-[var(--bg-dark)] text-[var(--green-up)] focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              />
+              <span className="text-[var(--text-secondary)]">Price</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showEquity}
+                onChange={e => setShowEquity(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-[var(--border)] bg-[var(--bg-dark)] text-[var(--green-up)] focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              />
+              <span className="text-[var(--text-secondary)]">Equity</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showTrades}
+                onChange={e => setShowTrades(e.target.checked)}
+                className="w-3.5 h-3.5 rounded border-[var(--border)] bg-[var(--bg-dark)] text-[var(--green-up)] focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              />
+              <span className="text-[var(--text-secondary)]">Trades</span>
+            </label>
+          </div>
           <button className="px-3 py-1.5 text-sm rounded-lg bg-[var(--bg-dark)]
                             border border-[var(--border)] text-[var(--text-secondary)]
                             hover:text-[var(--text-primary)] transition-colors">
@@ -106,7 +144,12 @@ export function BacktestResults() {
       <KPIGrid kpis={kpis} />
 
       <div className="flex-1 rounded-lg border border-[var(--border)] overflow-hidden min-h-[300px]">
-        <EquityCurveChart data={equityCurve} ohlcv={ohlcv} />
+        <EquityCurveChart
+          data={equityCurve}
+          ohlcv={ohlcv}
+          trades={backtestResult.trades}
+          options={displayOptions}
+        />
       </div>
     </div>
   );

@@ -1,8 +1,10 @@
-import { useMode, useSettingsOverlay } from '../../context'
+import { useMode, useSettingsOverlay, useBacktest } from '../../context'
 
 export function TopBar() {
   const { mode, setMode } = useMode()
   const { setSettingsOpen } = useSettingsOverlay()
+  const { backtestResult } = useBacktest()
+  const hasResults = !!backtestResult
 
   return (
     <header className="h-12 flex-none bg-[var(--bg-dark)] border-b border-[var(--border)] flex items-center justify-between px-3 md:px-4">
@@ -37,13 +39,16 @@ export function TopBar() {
             onClick={() => setMode('backtest')}
             aria-pressed={mode === 'backtest'}
             aria-label="Switch to backtest results view"
-            className={`px-2 py-1 rounded-full text-xs font-medium transition-all ${
+            className={`relative px-2 py-1 rounded-full text-xs font-medium transition-all ${
               mode === 'backtest'
                 ? 'bg-[var(--green-up)] text-[var(--bg-darkest)]'
                 : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
           >
             Backtest
+            {hasResults && mode !== 'backtest' && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[var(--green-up)] rounded-full animate-pulse" />
+            )}
           </button>
         </div>
 

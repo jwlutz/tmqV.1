@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { createChart, AreaSeries, LineSeries, CandlestickSeries, HistogramSeries, IChartApi, UTCTimestamp } from 'lightweight-charts';
+import { createChart, AreaSeries, LineSeries, CandlestickSeries, HistogramSeries, IChartApi, ISeriesApi, UTCTimestamp, SeriesMarker } from 'lightweight-charts';
 import { EquityPoint } from './types';
 
 export interface OHLCVPoint {
@@ -11,14 +11,37 @@ export interface OHLCVPoint {
   volume?: number;
 }
 
+export interface TradeMarker {
+  entry_date: string;
+  exit_date: string;
+  side: string;
+  pnl: number;
+  return_pct: number;
+}
+
+export interface ChartDisplayOptions {
+  showPrice: boolean;
+  showEquity: boolean;
+  showTrades: boolean;
+}
+
 interface EquityCurveChartProps {
   data: EquityPoint[];
   ohlcv?: OHLCVPoint[];
+  trades?: TradeMarker[];
+  options?: ChartDisplayOptions;
 }
 
-export function EquityCurveChart({ data, ohlcv }: EquityCurveChartProps) {
+const DEFAULT_OPTIONS: ChartDisplayOptions = {
+  showPrice: true,
+  showEquity: true,
+  showTrades: true,
+};
+
+export function EquityCurveChart({ data, ohlcv, trades, options = DEFAULT_OPTIONS }: EquityCurveChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
+  const { showPrice, showEquity, showTrades } = options;
 
   useEffect(() => {
     if (!containerRef.current || data.length === 0) return;
@@ -43,7 +66,11 @@ export function EquityCurveChart({ data, ohlcv }: EquityCurveChartProps) {
       },
     });
 
-    if (ohlcv && ohlcv.length > 0) {
+    // Reference to the series we'll add markers to (use ISeriesApi for proper typing)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let markerSeries: ISeriesApi<any> | null = null;
+
+    if (ohlcv && ohlcv.length > 0 && showPrice) {
       // Show OHLCV candlesticks on right price scale
       const candleSeries = chart.addSeries(CandlestickSeries, {
         upColor: '#22c55e',
@@ -64,6 +91,8 @@ export function EquityCurveChart({ data, ohlcv }: EquityCurveChartProps) {
         }))
       );
 
+      markerSeries = candleSeries;
+
       // Volume histogram
       const volumeSeries = chart.addSeries(HistogramSeries, {
         priceFormat: { type: 'volume' },
@@ -81,49 +110,102 @@ export function EquityCurveChart({ data, ohlcv }: EquityCurveChartProps) {
           color: c.close >= c.open ? '#22c55e40' : '#ef444440',
         }))
       );
+    }
 
-      // Equity curve as line overlay on separate scale
-      const equitySeries = chart.addSeries(LineSeries, {
-        color: '#3b82f6',
-        lineWidth: 2,
-        priceScaleId: 'equity',
-      });
+    if (showEquity) {
+      if (ohlcv && ohlcv.length > 0 && showPrice) {
+        // Equity curve as line overlay on separate scale
+        const equitySeries = chart.addSeries(LineSeries, {
+          color: '#3b82f6',
+          lineWidth: 2,
+          priceScaleId: 'equity',
+        });
 
-      equitySeries.priceScale().applyOptions({
-        scaleMargins: { top: 0.1, bottom: 0.2 },
-      });
+        equitySeries.priceScale().applyOptions({
+          scaleMargins: { top: 0.1, bottom: 0.2 },
+        });
 
-      equitySeries.setData(
-        data.map(p => ({
-          time: p.time as UTCTimestamp,
-          value: p.value,
-        }))
-      );
-    } else {
-      // No OHLCV — show equity curve as area chart (original behavior)
-      const areaSeries = chart.addSeries(AreaSeries, {
-        lineColor: '#22c55e',
-        topColor: 'rgba(34, 197, 94, 0.3)',
-        bottomColor: 'rgba(34, 197, 94, 0.0)',
-        lineWidth: 2,
-      });
+        equitySeries.setData(
+          data.map(p => ({
+            time: p.time as UTCTimestamp,
+            value: p.value,
+          }))
+        );
+      } else {
+        // No OHLCV or price hidden — show equity curve as area chart
+        const areaSeries = chart.addSeries(AreaSeries, {
+          lineColor: '#22c55e',
+          topColor: 'rgba(34, 197, 94, 0.3)',
+          bottomColor: 'rgba(34, 197, 94, 0.0)',
+          lineWidth: 2,
+        });
 
-      areaSeries.setData(
-        data.map(p => ({
-          time: p.time as UTCTimestamp,
-          value: p.value,
-        }))
-      );
+        areaSeries.setData(
+          data.map(p => ({
+            time: p.time as UTCTimestamp,
+            value: p.value,
+          }))
+        );
 
-      const baseline = chart.addSeries(LineSeries, {
-        color: 'rgba(255,255,255,0.2)',
-        lineWidth: 1,
-        lineStyle: 2,
-      });
-      baseline.setData([
-        { time: data[0].time as UTCTimestamp, value: data[0].value },
-        { time: data[data.length - 1].time as UTCTimestamp, value: data[0].value },
-      ]);
+        if (!markerSeries) markerSeries = areaSeries;
+
+        const baseline = chart.addSeries(LineSeries, {
+          color: 'rgba(255,255,255,0.2)',
+          lineWidth: 1,
+          lineStyle: 2,
+        });
+        baseline.setData([
+          { time: data[0].time as UTCTimestamp, value: data[0].value },
+          { time: data[data.length - 1].time as UTCTimestamp, value: data[0].value },
+        ]);
+      }
+    }
+
+    // Add trade markers (buy/sell arrows)
+    if (showTrades && trades && trades.length > 0 && markerSeries) {
+      try {
+        const markers: SeriesMarker<UTCTimestamp>[] = [];
+
+        for (const trade of trades) {
+          // Entry marker (buy = green arrow up, short = red arrow down)
+          const entryTime = Math.floor(new Date(trade.entry_date).getTime() / 1000) as UTCTimestamp;
+          const isLong = trade.side.toLowerCase() === 'long' || trade.side.toLowerCase() === 'buy';
+
+          markers.push({
+            time: entryTime,
+            position: isLong ? 'belowBar' : 'aboveBar',
+            color: '#22c55e',
+            shape: isLong ? 'arrowUp' : 'arrowDown',
+            text: 'BUY',
+            size: 1,
+          });
+
+          // Exit marker
+          const exitTime = Math.floor(new Date(trade.exit_date).getTime() / 1000) as UTCTimestamp;
+          const isProfitable = trade.pnl > 0;
+
+          markers.push({
+            time: exitTime,
+            position: isLong ? 'aboveBar' : 'belowBar',
+            color: isProfitable ? '#22c55e' : '#ef4444',
+            shape: isLong ? 'arrowDown' : 'arrowUp',
+            text: 'SELL',
+            size: 1,
+          });
+        }
+
+        // Sort markers by time (required by lightweight-charts)
+        markers.sort((a, b) => (a.time as number) - (b.time as number));
+
+        // setMarkers may not be available on all series types in some lightweight-charts versions
+        // Use type assertion since TypeScript doesn't know setMarkers exists on ISeriesApi
+        const seriesWithMarkers = markerSeries as unknown as { setMarkers?: (markers: SeriesMarker<UTCTimestamp>[]) => void };
+        if (typeof seriesWithMarkers.setMarkers === 'function') {
+          seriesWithMarkers.setMarkers(markers);
+        }
+      } catch (err) {
+        console.warn('Failed to set trade markers:', err);
+      }
     }
 
     chart.timeScale().fitContent();
@@ -143,7 +225,7 @@ export function EquityCurveChart({ data, ohlcv }: EquityCurveChartProps) {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, ohlcv]);
+  }, [data, ohlcv, trades, showPrice, showEquity, showTrades]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

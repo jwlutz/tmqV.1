@@ -51,11 +51,13 @@ def execute_tool(name: str, args: dict) -> str:
                 **(args.get("params") or {}),
             )
             return json.dumps({
+                "symbol": args["symbol"],
+                "strategy": args["strategy"],
+                "parameters": args.get("params") or {},
                 "metrics": result.metrics,
-                "trade_count": len(result.trades),
-                "trades_sample": result.trades[:10],
-                "equity_start": result.equity_curve[0] if result.equity_curve else None,
-                "equity_end": result.equity_curve[-1] if result.equity_curve else None,
+                "equity_curve": result.equity_curve,  # Full curve for chart display
+                "trades": result.trades,
+                "provider": "yfinance",
             })
 
         elif name == "tmq_backtest_custom":
@@ -64,9 +66,13 @@ def execute_tool(name: str, args: dict) -> str:
             )
             result = execute_custom_strategy(args["code"], df)
             return json.dumps({
+                "symbol": args["symbol"],
+                "strategy": "custom",
+                "parameters": {},
                 "metrics": result.metrics,
-                "trade_count": len(result.trades),
-                "trades_sample": result.trades[:10],
+                "equity_curve": result.equity_curve,  # Full curve for chart display
+                "trades": result.trades,
+                "provider": "yfinance",
             })
 
         elif name == "tmq_strategies":
@@ -132,6 +138,7 @@ async def chat_stream(
     api_key: str,
     model: str = "gpt-4o-mini",
     use_openrouter: bool = False,
+    context: dict | None = None,
 ):
     """
     Agentic chat loop with tool calling.
@@ -142,6 +149,9 @@ async def chat_stream(
     - Google (Gemini): Concise prompts
 
     When use_openrouter=True, routes through OpenRouter API for unified access.
+
+    Args:
+        context: Current chart context with keys: symbol, interval, widget_type
 
     Yields SSE-formatted strings:
       data: {"type": "text", "content": "..."}
@@ -155,6 +165,26 @@ async def chat_stream(
     # Detect provider from model name and build appropriate prompt
     provider = get_provider_from_model(model)
     system_prompt = build_prompt(provider, env)
+
+    # Add chart context if available
+    if context:
+        context_parts = []
+        if context.get("symbol"):
+            context_parts.append(f"symbol: {context['symbol']}")
+        if context.get("interval"):
+            context_parts.append(f"timeframe: {context['interval']}")
+        if context.get("widget_type"):
+            context_parts.append(f"chart type: {context['widget_type']}")
+
+        if context_parts:
+            context_str = ", ".join(context_parts)
+            system_prompt += (
+                f"\n\n<current_chart>\n"
+                f"User is viewing: {context_str}\n"
+                f"When the user asks about indicators, prices, or backtests without specifying a symbol, "
+                f"use {context.get('symbol', 'BTC-USD')} as the default.\n"
+                f"</current_chart>"
+            )
 
     full_messages = [{"role": "system", "content": system_prompt}] + messages
 
@@ -178,69 +208,90 @@ async def chat_stream(
         }
 
     max_iterations = 10
-    for _ in range(max_iterations):
-        # Update messages for each iteration (they grow with tool results)
-        completion_kwargs["messages"] = full_messages
-        response = litellm.completion(**completion_kwargs)
+    try:
+        for _ in range(max_iterations):
+            # Update messages for each iteration (they grow with tool results)
+            completion_kwargs["messages"] = full_messages
 
-        # Collect all streamed chunks, then use stream_chunk_builder
-        # to properly reconstruct the full response including tool calls.
-        chunks = []
-        collected_content = ""
+            try:
+                response = litellm.completion(**completion_kwargs)
+            except Exception as e:
+                # Handle LLM API errors (auth, rate limits, invalid model, etc.)
+                error_msg = str(e)
+                # Clean up common litellm error prefixes
+                if "litellm." in error_msg:
+                    error_msg = error_msg.split(" - ", 1)[-1] if " - " in error_msg else error_msg
+                yield _sse({"type": "error", "content": f"AI Error: {error_msg}"})
+                yield _sse({"type": "done"})
+                return
 
-        for chunk in response:
-            chunks.append(chunk)
-            delta = chunk.choices[0].delta
-            # Stream text content to client as it arrives
-            if delta.content:
-                collected_content += delta.content
-                yield _sse({"type": "text", "content": delta.content})
+            # Collect all streamed chunks, then use stream_chunk_builder
+            # to properly reconstruct the full response including tool calls.
+            chunks = []
+            collected_content = ""
 
-        # Use litellm's stream_chunk_builder to properly reconstruct
-        # tool calls from accumulated chunks. This handles the tricky
-        # accumulation of function name + arguments across chunks.
-        full_response = litellm.stream_chunk_builder(chunks, messages=full_messages)
-        assistant_message = full_response.choices[0].message
+            try:
+                for chunk in response:
+                    chunks.append(chunk)
+                    delta = chunk.choices[0].delta
+                    # Stream text content to client as it arrives
+                    if delta.content:
+                        collected_content += delta.content
+                        yield _sse({"type": "text", "content": delta.content})
+            except Exception as e:
+                yield _sse({"type": "error", "content": f"Stream error: {e}"})
+                yield _sse({"type": "done"})
+                return
 
-        tool_calls = assistant_message.tool_calls
+            # Use litellm's stream_chunk_builder to properly reconstruct
+            # tool calls from accumulated chunks. This handles the tricky
+            # accumulation of function name + arguments across chunks.
+            full_response = litellm.stream_chunk_builder(chunks, messages=full_messages)
+            assistant_message = full_response.choices[0].message
 
-        # If no tool calls, we're done
-        if not tool_calls:
-            break
+            tool_calls = assistant_message.tool_calls
 
-        # Build the assistant message for the conversation history
-        assistant_msg_dict = {
-            "role": "assistant",
-            "content": assistant_message.content or "",
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
-                for tc in tool_calls
-            ],
-        }
-        full_messages.append(assistant_msg_dict)
+            # If no tool calls, we're done
+            if not tool_calls:
+                break
 
-        # Execute each tool call and append results
-        for tc in tool_calls:
-            func_name = tc.function.name
-            func_args = json.loads(tc.function.arguments)
+            # Build the assistant message for the conversation history
+            assistant_msg_dict = {
+                "role": "assistant",
+                "content": assistant_message.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in tool_calls
+                ],
+            }
+            full_messages.append(assistant_msg_dict)
 
-            yield _sse({"type": "tool_call", "name": func_name, "args": func_args})
+            # Execute each tool call and append results
+            for tc in tool_calls:
+                func_name = tc.function.name
+                func_args = json.loads(tc.function.arguments)
 
-            result = execute_tool(func_name, func_args)
+                yield _sse({"type": "tool_call", "name": func_name, "args": func_args})
 
-            yield _sse({"type": "tool_result", "name": func_name, "result": result})
+                result = execute_tool(func_name, func_args)
 
-            full_messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": result,
-            })
+                yield _sse({"type": "tool_result", "name": func_name, "result": result})
+
+                full_messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                })
+
+    except Exception as e:
+        # Catch-all for any unexpected errors
+        yield _sse({"type": "error", "content": f"Unexpected error: {e}"})
 
     yield _sse({"type": "done"})
