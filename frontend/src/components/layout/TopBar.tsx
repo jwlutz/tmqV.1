@@ -12,7 +12,7 @@ export function TopBar() {
   const { mode, setMode } = useMode()
   const { setSettingsOpen } = useSettingsOverlay()
   const { backtestResult } = useBacktest()
-  const { panes, openPane } = useWorkspace()
+  const { openPane } = useWorkspace()
   const hasResults = !!backtestResult
 
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -34,9 +34,6 @@ export function TopBar() {
     openPane(type)
     setAddMenuOpen(false)
   }
-
-  // Check which panes are already open
-  const openTypes = new Set(panes.map(p => p.type))
 
   return (
     <header className="h-12 flex-none bg-[var(--bg-dark)] border-b border-[var(--border)] flex items-center justify-between px-3 md:px-4">
@@ -70,25 +67,16 @@ export function TopBar() {
 
           {addMenuOpen && (
             <div className="absolute top-full left-0 mt-1 w-36 rounded-lg bg-[#1a1f2e] border border-[var(--border)] shadow-xl z-50 py-1">
-              {PANE_OPTIONS.map(opt => {
-                const isOpen = openTypes.has(opt.type)
-                return (
-                  <button
-                    key={opt.type}
-                    onClick={() => handleAddPane(opt.type)}
-                    disabled={isOpen}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors
-                      ${isOpen
-                        ? 'text-[var(--text-tertiary)] cursor-not-allowed'
-                        : 'hover:bg-white/5 text-[var(--text-primary)]'
-                      }`}
-                  >
-                    <span className="text-sm">{opt.icon}</span>
-                    <span>{opt.label}</span>
-                    {isOpen && <span className="ml-auto text-[10px] text-[var(--text-tertiary)]">open</span>}
-                  </button>
-                )
-              })}
+              {PANE_OPTIONS.map(opt => (
+                <button
+                  key={opt.type}
+                  onClick={() => handleAddPane(opt.type)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors hover:bg-white/5 text-[var(--text-primary)]"
+                >
+                  <span className="text-sm">{opt.icon}</span>
+                  <span>{opt.label}</span>
+                </button>
+              ))}
             </div>
           )}
         </div>

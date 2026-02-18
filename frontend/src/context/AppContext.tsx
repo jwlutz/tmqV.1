@@ -223,8 +223,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openPane = useCallback((type: WorkspacePaneType) => {
     setWorkspacePanes(prev => {
-      // Check if pane of this type already exists
-      if (prev.some(p => p.type === type)) return prev;
       const id = `pane-${type}-${Date.now()}`;
       return [...prev, { id, type }];
     });

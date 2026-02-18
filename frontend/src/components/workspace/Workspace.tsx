@@ -51,7 +51,7 @@ export function Workspace() {
           {/* Chart pane */}
           {chartPane && (
             <div
-              className="min-w-0"
+              className="min-w-0 h-full"
               style={{ width: hasBothMainPanes ? `${(1 - chatRatio) * 100}%` : '100%' }}
             >
               <WorkspacePane
@@ -78,7 +78,7 @@ export function Workspace() {
           {/* Chat pane */}
           {chatPane && (
             <div
-              className="min-w-0"
+              className="min-w-0 h-full"
               style={{ width: hasBothMainPanes ? `${chatRatio * 100}%` : '100%' }}
             >
               <WorkspacePane

@@ -39,7 +39,7 @@ export function ChartGrid() {
   const resetRow = useCallback(() => setRowRatio(0.5), [])
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col h-full min-h-0">
       {/* Layout selector toolbar — only shown for multi-pane layouts */}
       {layout !== '1x1' && (
         <div className="flex items-center justify-end gap-2 px-2 py-1 bg-[var(--bg-darker)] border-b border-[var(--border)]">
