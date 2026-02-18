@@ -5,9 +5,10 @@ import { ChartTabContent } from './ChartTabContent'
 import { ChatSidebarContent } from './ChatPaneContent'
 import { CodeTabContent } from './CodeTabContent'
 import { BacktestResults } from '../backtest/BacktestResults'
+import { RotContent } from '../rot/RotContent'
 import { useBacktest } from '../../context'
 
-type ComponentType = 'chart' | 'chat' | 'code' | 'backtest'
+type ComponentType = 'chart' | 'chat' | 'code' | 'backtest' | 'rot'
 
 // Default model: single tabset with all three tabs
 const DEFAULT_MODEL: IJsonModel = {
@@ -96,6 +97,8 @@ function factory(node: TabNode): React.ReactNode {
       return <CodeTabContent tabId={tabId} />
     case 'backtest':
       return <BacktestResults />
+    case 'rot':
+      return <RotContent />
     default:
       return (
         <div className="flex items-center justify-center h-full text-[var(--text-tertiary)]">

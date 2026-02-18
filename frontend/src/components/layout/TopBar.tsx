@@ -1,20 +1,18 @@
 import { useState, useRef, useEffect } from 'react'
-import { useMode, useSettingsOverlay, useBacktest } from '../../context'
+import { useSettingsOverlay } from '../../context'
 
-type PaneType = 'chart' | 'chat' | 'code' | 'backtest'
+type PaneType = 'chart' | 'chat' | 'code' | 'backtest' | 'rot'
 
 const PANE_OPTIONS: { type: PaneType; label: string; icon: string }[] = [
   { type: 'chart', label: 'Chart', icon: '\u{1F4C8}' },
   { type: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
   { type: 'code', label: 'Code', icon: '\u{1F4BB}' },
   { type: 'backtest', label: 'Backtest', icon: '\u{1F4CA}' },
+  { type: 'rot', label: 'Rot', icon: '\u{1F9E0}' },
 ]
 
 export function TopBar() {
-  const { mode, setMode } = useMode()
   const { setSettingsOpen } = useSettingsOverlay()
-  const { backtestResult } = useBacktest()
-  const hasResults = !!backtestResult
 
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -88,37 +86,6 @@ export function TopBar() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Mode toggle */}
-        <div className="flex items-center rounded-full border border-[var(--border)] p-0.5">
-          <button
-            onClick={() => setMode('live')}
-            aria-pressed={mode === 'live'}
-            aria-label="Switch to live trading view"
-            className={`px-2 py-1 rounded-full text-xs font-medium transition-all ${
-              mode === 'live'
-                ? 'bg-[var(--green-up)] text-[var(--bg-darkest)]'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            Live
-          </button>
-          <button
-            onClick={() => setMode('backtest')}
-            aria-pressed={mode === 'backtest'}
-            aria-label="Switch to backtest results view"
-            className={`relative px-2 py-1 rounded-full text-xs font-medium transition-all ${
-              mode === 'backtest'
-                ? 'bg-[var(--green-up)] text-[var(--bg-darkest)]'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            Backtest
-            {hasResults && mode !== 'backtest' && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[var(--green-up)] rounded-full animate-pulse" />
-            )}
-          </button>
-        </div>
-
         {/* Settings button */}
         <button
           onClick={() => setSettingsOpen(true)}

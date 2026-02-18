@@ -9,18 +9,19 @@ import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 function mapKPIs(metrics: APIBacktestResult['metrics']): BacktestKPIs {
   return {
-    sharpeRatio: metrics.sharpe,
-    cagr: metrics.cagr * 100,           // backend returns decimal, frontend shows %
-    maxDrawdown: metrics.max_drawdown * 100,
-    winRate: metrics.win_rate * 100,
-    totalTrades: metrics.total_trades,
-    profitFactor: metrics.profit_factor,
-    sortinoRatio: metrics.sortino,
-    totalReturn: metrics.total_return * 100,
+    sharpeRatio: metrics?.sharpe ?? 0,
+    cagr: (metrics?.cagr ?? 0) * 100,           // backend returns decimal, frontend shows %
+    maxDrawdown: (metrics?.max_drawdown ?? 0) * 100,
+    winRate: (metrics?.win_rate ?? 0) * 100,
+    totalTrades: metrics?.total_trades ?? 0,
+    profitFactor: metrics?.profit_factor ?? 0,
+    sortinoRatio: metrics?.sortino ?? 0,
+    totalReturn: (metrics?.total_return ?? 0) * 100,
   };
 }
 
 function mapEquityCurve(curve: APIBacktestResult['equity_curve']): EquityPoint[] {
+  if (!curve || !Array.isArray(curve)) return [];
   return curve.map(p => ({
     time: Math.floor(new Date(p.date).getTime() / 1000),
     value: p.equity,
@@ -87,9 +88,10 @@ export function BacktestResults() {
   }
 
   const kpis = mapKPIs(backtestResult.metrics);
-  const equityCurve = mapEquityCurve(backtestResult.equity_curve);
-  const startDate = backtestResult.equity_curve[0]?.date ?? '';
-  const endDate = backtestResult.equity_curve[backtestResult.equity_curve.length - 1]?.date ?? '';
+  const curve = backtestResult.equity_curve ?? [];
+  const equityCurve = mapEquityCurve(curve);
+  const startDate = curve[0]?.date ?? '';
+  const endDate = curve[curve.length - 1]?.date ?? '';
 
   return (
     <div className="flex flex-col h-full p-4">

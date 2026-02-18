@@ -51,7 +51,8 @@ def format_examples() -> str:
         lines.append(f"\n### Example {i}")
         lines.append(f"**User**: {ex['user']}")
         lines.append(f"**Reasoning**: {ex['assistant_reasoning']}")
-        lines.append(f"**Action**: {ex['tool_call']}")
+        if "tool_call" in ex:
+            lines.append(f"**Action**: {ex['tool_call']}")
         if "assistant_response" in ex:
             lines.append(f"**Response**:\n{ex['assistant_response']}")
     return "\n".join(lines)

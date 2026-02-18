@@ -56,7 +56,8 @@ def format_examples() -> str:
         lines.append(f"<example_{i}>")
         lines.append(f"User: {ex['user']}")
         lines.append(f"Assistant reasoning: {ex['assistant_reasoning']}")
-        lines.append(f"Tool call: {ex['tool_call']}")
+        if "tool_call" in ex:
+            lines.append(f"Tool call: {ex['tool_call']}")
         if "assistant_response" in ex:
             lines.append(f"Response format example:\n{ex['assistant_response']}")
         lines.append(f"</example_{i}>")

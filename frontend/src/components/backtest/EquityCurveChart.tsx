@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, AreaSeries, LineSeries, CandlestickSeries, HistogramSeries, IChartApi, ISeriesApi, UTCTimestamp, SeriesMarker } from 'lightweight-charts';
+import { createChart, AreaSeries, LineSeries, CandlestickSeries, HistogramSeries, IChartApi, ISeriesApi, UTCTimestamp, SeriesMarker, createSeriesMarkers } from 'lightweight-charts';
 import { EquityPoint } from './types';
 
 export interface OHLCVPoint {
@@ -182,7 +182,7 @@ export function EquityCurveChart({ data, ohlcv, trades, options = DEFAULT_OPTION
       }
     }
 
-    // Add trade markers (buy/sell arrows)
+    // Add trade markers (buy/sell arrows) using v5 createSeriesMarkers API
     if (showTrades && trades && trades.length > 0 && markerSeries) {
       try {
         const markers: SeriesMarker<UTCTimestamp>[] = [];
@@ -218,12 +218,8 @@ export function EquityCurveChart({ data, ohlcv, trades, options = DEFAULT_OPTION
         // Sort markers by time (required by lightweight-charts)
         markers.sort((a, b) => (a.time as number) - (b.time as number));
 
-        // setMarkers may not be available on all series types in some lightweight-charts versions
-        // Use type assertion since TypeScript doesn't know setMarkers exists on ISeriesApi
-        const seriesWithMarkers = markerSeries as unknown as { setMarkers?: (markers: SeriesMarker<UTCTimestamp>[]) => void };
-        if (typeof seriesWithMarkers.setMarkers === 'function') {
-          seriesWithMarkers.setMarkers(markers);
-        }
+        // Use v5 createSeriesMarkers API
+        createSeriesMarkers(markerSeries, markers);
       } catch (err) {
         console.warn('Failed to set trade markers:', err);
       }
