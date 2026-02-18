@@ -1,1 +1,119 @@
-/* App-specific styles - currently empty */
+/* FlexLayout theme customizations to match app colors */
+.flexlayout__layout {
+  --color-text: var(--text-primary);
+  --color-background: var(--bg-darkest);
+  --color-base: var(--bg-darkest);
+  --color-1: var(--bg-dark);
+  --color-2: var(--bg-darker);
+  --color-3: var(--bg-medium);
+  --color-4: rgba(255, 255, 255, 0.1);
+  --color-5: rgba(255, 255, 255, 0.15);
+  --color-6: rgba(255, 255, 255, 0.2);
+  --color-drag1: var(--green-up);
+  --color-drag2: var(--green-up);
+  --color-drag1-background: rgba(34, 197, 94, 0.15);
+  --color-drag2-background: rgba(34, 197, 94, 0.15);
+  --font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --color-icon: var(--text-secondary);
+  --color-overflow: var(--text-secondary);
+  --color-tab-selected: var(--text-primary);
+  --color-tab-unselected: var(--text-secondary);
+  --color-splitter: var(--border);
+  --color-splitter-hover: rgba(255, 255, 255, 0.15);
+  --color-splitter-drag: var(--green-up);
+}
+
+/* Tab styling */
+.flexlayout__tab_button {
+  border-radius: 6px 6px 0 0;
+  padding: 4px 12px !important;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.flexlayout__tab_button--selected {
+  background-color: var(--bg-dark) !important;
+}
+
+.flexlayout__tab_button:hover:not(.flexlayout__tab_button--selected) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Tab close button */
+.flexlayout__tab_button_trailing {
+  margin-left: 8px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.flexlayout__tab_button:hover .flexlayout__tab_button_trailing {
+  opacity: 1;
+}
+
+/* Tabset header */
+.flexlayout__tabset_header {
+  background-color: var(--bg-darker) !important;
+  border-bottom: 1px solid var(--border);
+}
+
+.flexlayout__tabset_tabbar_outer {
+  background-color: var(--bg-darker) !important;
+}
+
+/* Tab content area */
+.flexlayout__tab {
+  background-color: var(--bg-dark) !important;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+/* Splitter */
+.flexlayout__splitter {
+  background-color: transparent !important;
+}
+
+.flexlayout__splitter:hover {
+  background-color: var(--green-up) !important;
+}
+
+/* Drag rectangle */
+.flexlayout__drag_rect {
+  border: 2px solid var(--green-up) !important;
+  background-color: rgba(34, 197, 94, 0.1) !important;
+  border-radius: 8px;
+}
+
+/* Edge drop indicators */
+.flexlayout__edge_rect {
+  background-color: rgba(34, 197, 94, 0.3) !important;
+  border: 2px dashed var(--green-up) !important;
+}
+
+/* Maximize button */
+.flexlayout__tab_toolbar_button {
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.flexlayout__tab_toolbar_button:hover {
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 4px;
+}
+
+/* Popup overflow menu */
+.flexlayout__popup_menu {
+  background-color: var(--bg-dark) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+}
+
+.flexlayout__popup_menu_item {
+  padding: 6px 12px !important;
+  font-size: 12px;
+}
+
+.flexlayout__popup_menu_item:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}

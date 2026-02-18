@@ -1,4 +1,7 @@
 export { Workspace } from './Workspace'
+export { FlexWorkspace } from './FlexWorkspace'
 export { WorkspacePane } from './WorkspacePane'
 export { ChatSidebarContent } from './ChatPaneContent'
 export { CodePanelContent } from './CodePaneContent'
+export { ChartTabContent } from './ChartTabContent'
+export { CodeTabContent } from './CodeTabContent'

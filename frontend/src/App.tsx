@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import './App.css'
 import { AppProvider, useMode, useSettingsOverlay } from './context'
 import { TopBar } from './components/layout'
-import { Workspace } from './components/workspace'
+import { FlexWorkspace } from './components/workspace'
 import { SettingsOverlay } from './components/settings'
 import { ErrorBoundary } from './components/ui'
 
@@ -34,7 +34,7 @@ function AppContent() {
     <div className="h-screen flex flex-col">
       <TopBar />
       <ErrorBoundary>
-        <Workspace />
+        <FlexWorkspace />
       </ErrorBoundary>
       {settingsOpen && <SettingsOverlay onClose={() => setSettingsOpen(false)} />}
     </div>

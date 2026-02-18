@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { useMode, useSettingsOverlay, useBacktest, useWorkspace } from '../../context'
-import type { WorkspacePaneType } from '../../context'
+import { useMode, useSettingsOverlay, useBacktest } from '../../context'
 
-const PANE_OPTIONS: { type: WorkspacePaneType; label: string; icon: string }[] = [
+type PaneType = 'chart' | 'chat' | 'code'
+
+const PANE_OPTIONS: { type: PaneType; label: string; icon: string }[] = [
   { type: 'chart', label: 'Chart', icon: '\u{1F4C8}' },
   { type: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
   { type: 'code', label: 'Code', icon: '\u{1F4BB}' },
@@ -12,7 +13,6 @@ export function TopBar() {
   const { mode, setMode } = useMode()
   const { setSettingsOpen } = useSettingsOverlay()
   const { backtestResult } = useBacktest()
-  const { openPane } = useWorkspace()
   const hasResults = !!backtestResult
 
   const [addMenuOpen, setAddMenuOpen] = useState(false)
@@ -30,8 +30,12 @@ export function TopBar() {
     return () => document.removeEventListener('mousedown', handler)
   }, [addMenuOpen])
 
-  const handleAddPane = (type: WorkspacePaneType) => {
-    openPane(type)
+  const handleAddPane = (type: PaneType) => {
+    // Call the FlexLayout addTab function exposed on window
+    const addTab = (window as any).__flexLayoutAddTab
+    if (addTab) {
+      addTab(type)
+    }
     setAddMenuOpen(false)
   }
 

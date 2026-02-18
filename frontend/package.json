@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "flexlayout-react": "^0.8.18",
     "lightweight-charts": "^5.1.0",
     "lightweight-charts-indicators": "^0.1.0",
     "oakscriptjs": "^0.1.7",
