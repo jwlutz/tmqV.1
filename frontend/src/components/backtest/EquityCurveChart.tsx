@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createChart, AreaSeries, LineSeries, CandlestickSeries, HistogramSeries, IChartApi, ISeriesApi, UTCTimestamp, SeriesMarker } from 'lightweight-charts';
 import { EquityPoint } from './types';
 
@@ -42,13 +42,34 @@ export function EquityCurveChart({ data, ohlcv, trades, options = DEFAULT_OPTION
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const { showPrice, showEquity, showTrades } = options;
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  // Track container size with ResizeObserver (needed for FlexLayout deferred sizing)
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) {
+        const { width, height } = entry.contentRect;
+        setContainerSize(prev =>
+          prev.width !== width || prev.height !== height ? { width, height } : prev
+        );
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current || data.length === 0) return;
 
+    // Guard against 0-dimension containers (FlexLayout may render before sizing)
+    const { width, height } = containerSize;
+    if (width === 0 || height === 0) return;
+
     const chart = createChart(containerRef.current, {
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
+      width,
+      height,
       layout: {
         background: { color: '#0b0f19' },
         textColor: '#e8ecf4',
@@ -73,12 +94,12 @@ export function EquityCurveChart({ data, ohlcv, trades, options = DEFAULT_OPTION
     if (ohlcv && ohlcv.length > 0 && showPrice) {
       // Show OHLCV candlesticks on right price scale
       const candleSeries = chart.addSeries(CandlestickSeries, {
-        upColor: '#22c55e',
-        downColor: '#ef4444',
-        borderUpColor: '#22c55e',
-        borderDownColor: '#ef4444',
-        wickUpColor: '#22c55e',
-        wickDownColor: '#ef4444',
+        upColor: '#26a69a',
+        downColor: '#ef5350',
+        borderUpColor: '#26a69a',
+        borderDownColor: '#ef5350',
+        wickUpColor: '#26a69a',
+        wickDownColor: '#ef5350',
       });
 
       candleSeries.setData(
@@ -107,7 +128,7 @@ export function EquityCurveChart({ data, ohlcv, trades, options = DEFAULT_OPTION
         ohlcv.map(c => ({
           time: c.time as UTCTimestamp,
           value: c.volume ?? 0,
-          color: c.close >= c.open ? '#22c55e40' : '#ef444440',
+          color: c.close >= c.open ? '#26a69a40' : '#ef535040',
         }))
       );
     }
@@ -225,7 +246,7 @@ export function EquityCurveChart({ data, ohlcv, trades, options = DEFAULT_OPTION
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [data, ohlcv, trades, showPrice, showEquity, showTrades]);
+  }, [data, ohlcv, trades, showPrice, showEquity, showTrades, containerSize]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }

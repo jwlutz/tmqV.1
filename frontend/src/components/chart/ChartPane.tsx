@@ -4,10 +4,13 @@ import { PaneIntervalSelector } from './PaneIntervalSelector'
 import { TickerDropdown } from './TickerDropdown'
 import { LayoutSelector } from './LayoutSelector'
 import { CompareDropdown } from './CompareDropdown'
+import { ChartTypeSelector } from './ChartTypeSelector'
+import { ScaleToggle } from './ScaleToggle'
+import { TimeRangePresets } from './TimeRangePresets'
 import { getWidgetComponent, WIDGET_REGISTRY } from '../../widgets'
 import type { WidgetType, WidgetDefinition } from '../../widgets'
 import type { ChartLayout } from '../../context'
-import type { CandlestickIndicatorInfo } from '../../widgets/CandlestickWidget'
+import type { CandlestickIndicatorInfo, ChartType, ScaleMode } from '../../widgets/CandlestickWidget'
 
 interface ChartPaneProps {
   paneId: string;
@@ -49,6 +52,11 @@ export function ChartPane({
   // State bubbled up from CandlestickWidget via callbacks
   const [chartStatus, setChartStatus] = useState('connecting')
   const [compareSymbol, setCompareSymbol] = useState<string | null>(null)
+
+  // Chart display options
+  const [chartType, setChartType] = useState<ChartType>('candles')
+  const [scaleMode, setScaleMode] = useState<ScaleMode>('normal')
+  const [timeRange, setTimeRange] = useState<string | null>(null)
 
   // Store indicator info in a ref to avoid infinite re-render loops.
   const indicatorInfoRef = useRef<CandlestickIndicatorInfo | null>(null)
@@ -160,6 +168,24 @@ export function ChartPane({
             <PaneIntervalSelector value={interval} onChange={onIntervalChange} />
           )}
 
+          {/* Chart type selector */}
+          {isCandlestick && (
+            <ChartTypeSelector
+              value={chartType}
+              onChange={setChartType}
+              disabled={controlsDisabled}
+            />
+          )}
+
+          {/* Scale toggle */}
+          {isCandlestick && (
+            <ScaleToggle
+              value={scaleMode}
+              onChange={setScaleMode}
+              disabled={controlsDisabled}
+            />
+          )}
+
           {/* Indicator chips + dropdown */}
           {definition.supportsIndicators && indicatorInfo && (
             <>
@@ -212,6 +238,15 @@ export function ChartPane({
             </div>
           )}
 
+          {/* Time range presets */}
+          {isCandlestick && (
+            <TimeRangePresets
+              value={timeRange}
+              onChange={setTimeRange}
+              disabled={controlsDisabled}
+            />
+          )}
+
         </div>
 
         <div className="flex items-center gap-1">
@@ -242,6 +277,9 @@ export function ChartPane({
             onCompareSymbolChange={setCompareSymbol}
             onStatusChange={setChartStatus}
             onIndicatorsReady={handleIndicatorsReady}
+            chartType={chartType}
+            scaleMode={scaleMode}
+            timeRange={timeRange}
           />
         ) : (
           <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-[var(--bg-dark)]"><div className="w-6 h-6 border-2 border-[var(--text-tertiary)] border-t-[var(--text-primary)] rounded-full animate-spin" /></div>}>

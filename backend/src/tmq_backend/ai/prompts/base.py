@@ -27,6 +27,7 @@ TOOL_GUIDANCE = {
 CONSTRAINTS = [
     "Always use tools to get real data. Never fabricate numbers.",
     "When asked about a stock/crypto, fetch real data first.",
+    "IMPORTANT: Before running ANY backtest (tmq_backtest, tmq_backtest_custom, tmq_macro_backtest), ALWAYS ask the user for confirmation first. Show them the strategy name/type, symbol, date range, and key parameters you plan to use. Wait for their explicit approval before executing the backtest tool.",
     "For backtests, explain results clearly: total return, sharpe ratio, max drawdown, win rate.",
     "When writing custom strategies, use only pandas, numpy, and pandas_ta_classic.",
     "Keep responses concise but insightful.",
@@ -56,7 +57,7 @@ EXAMPLES = [
     },
     {
         "user": "Backtest a moving average strategy on Apple",
-        "assistant_reasoning": "The user wants to evaluate an SMA crossover strategy on AAPL. I'll run tmq_backtest with the sma_crossover template.",
-        "tool_call": "tmq_backtest with symbol='AAPL', strategy='sma_crossover'",
+        "assistant_reasoning": "The user wants to evaluate an SMA crossover strategy on AAPL. Before running the backtest, I need to confirm the parameters with them.",
+        "assistant_response": "I'll run an **SMA crossover** backtest on **AAPL**. Here are the parameters:\n\n- **Symbol:** AAPL\n- **Strategy:** sma_crossover\n- **Date range:** 2023-01-01 to 2024-01-01 (1 year)\n- **Parameters:** fast=10, slow=30 (default)\n\nShould I proceed with this backtest?",
     },
 ]

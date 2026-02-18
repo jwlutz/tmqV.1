@@ -50,6 +50,7 @@ export interface APIBacktestResult {
   parameters: Record<string, unknown>;
   metrics: {
     sharpe: number;
+    sortino: number;
     max_drawdown: number;
     cagr: number;
     win_rate: number;

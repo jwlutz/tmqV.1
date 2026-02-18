@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useMode, useSettingsOverlay, useBacktest } from '../../context'
 
-type PaneType = 'chart' | 'chat' | 'code'
+type PaneType = 'chart' | 'chat' | 'code' | 'backtest'
 
 const PANE_OPTIONS: { type: PaneType; label: string; icon: string }[] = [
   { type: 'chart', label: 'Chart', icon: '\u{1F4C8}' },
   { type: 'chat', label: 'Chat', icon: '\u{1F4AC}' },
   { type: 'code', label: 'Code', icon: '\u{1F4BB}' },
+  { type: 'backtest', label: 'Backtest', icon: '\u{1F4CA}' },
 ]
 
 export function TopBar() {

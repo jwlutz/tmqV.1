@@ -1,5 +1,5 @@
 import { useEffect, useRef, useMemo, useState } from 'react'
-import { createChart, CandlestickSeries, HistogramSeries, LineSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp } from 'lightweight-charts'
+import { createChart, CandlestickSeries, HistogramSeries, LineSeries, AreaSeries, BarSeries, BaselineSeries, IChartApi, ISeriesApi, CrosshairMode, UTCTimestamp, PriceScaleMode } from 'lightweight-charts'
 import { useMarketData } from '../hooks'
 import { useIndicators } from '../hooks/useIndicators'
 import type { IndicatorResult, IndicatorConfig, CustomIndicator } from '../hooks/useIndicators'
@@ -23,6 +23,9 @@ export interface CandlestickIndicatorInfo {
   removeCustomIndicator: (id: string) => void
 }
 
+export type ChartType = 'candles' | 'line' | 'area' | 'bars' | 'baseline' | 'hlc' | 'hollow'
+export type ScaleMode = 'normal' | 'log' | 'percent' | 'indexed'
+
 export interface CandlestickWidgetProps {
   paneId: string
   symbol: string
@@ -32,6 +35,9 @@ export interface CandlestickWidgetProps {
   onCompareSymbolChange: (sym: string | null) => void
   onStatusChange?: (status: string) => void
   onIndicatorsReady?: (info: CandlestickIndicatorInfo) => void
+  chartType?: ChartType
+  scaleMode?: ScaleMode
+  timeRange?: string | null
 }
 
 // Plot color variants for multi-plot indicators
@@ -45,15 +51,21 @@ export function CandlestickWidget({
   onCompareSymbolChange,
   onStatusChange,
   onIndicatorsReady,
+  chartType = 'candles',
+  scaleMode = 'normal',
+  timeRange: _timeRange,
 }: CandlestickWidgetProps) {
+  void _timeRange // Reserved for future time range presets
   const { candles, status, isCrypto, loadMoreHistory, isLoadingMore } = useMarketData(symbol, interval)
   const { stats: marketStats } = useMarketStats(symbol)
   const { providerCredentials } = useDataSettings()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
-  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mainSeriesRef = useRef<ISeriesApi<any> | null>(null)
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null)
+  const currentChartTypeRef = useRef<ChartType>(chartType)
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
   const compareSeriesRef = useRef<ISeriesApi<'Line'> | null>(null)
   const macroSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map())
@@ -129,8 +141,8 @@ export function CandlestickWidget({
 
     if (chartDisposedRef.current || !chartRef.current) return
 
-    if (candleSeriesRef.current) {
-      try { candleSeriesRef.current.setData([]) } catch { /* ignore */ }
+    if (mainSeriesRef.current) {
+      try { mainSeriesRef.current.setData([]) } catch { /* ignore */ }
     }
     if (volumeSeriesRef.current) {
       try { volumeSeriesRef.current.setData([]) } catch { /* ignore */ }
@@ -160,33 +172,34 @@ export function CandlestickWidget({
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
       layout: {
-        background: { color: '#0b0f19' },
-        textColor: '#e8ecf4',
+        background: { color: '#131722' },
+        textColor: '#d1d4dc',
       },
       grid: {
-        vertLines: { color: 'rgba(255,255,255,0.06)' },
-        horzLines: { color: 'rgba(255,255,255,0.06)' },
+        vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
+        horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
       },
       crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: 'rgba(255,255,255,0.06)' },
+      rightPriceScale: { borderColor: 'rgba(42, 46, 57, 0.8)' },
       leftPriceScale: {
         visible: false,
         borderColor: 'rgba(59, 130, 246, 0.3)',
       },
       timeScale: {
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: 'rgba(42, 46, 57, 0.8)',
         timeVisible: true,
         secondsVisible: false,
       },
     })
 
-    const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#22c55e',
-      downColor: '#ef4444',
-      borderUpColor: '#22c55e',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e',
-      wickDownColor: '#ef4444',
+    // Create main series based on chart type
+    const mainSeries = chart.addSeries(CandlestickSeries, {
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderUpColor: '#26a69a',
+      borderDownColor: '#ef5350',
+      wickUpColor: '#26a69a',
+      wickDownColor: '#ef5350',
       lastValueVisible: false,
       priceLineVisible: false,
     })
@@ -202,8 +215,9 @@ export function CandlestickWidget({
     })
 
     chartRef.current = chart
-    candleSeriesRef.current = candleSeries
+    mainSeriesRef.current = mainSeries
     volumeSeriesRef.current = volumeSeries
+    currentChartTypeRef.current = 'candles'
     chartDisposedRef.current = false
 
     const ro = new ResizeObserver(() => {
@@ -227,10 +241,148 @@ export function CandlestickWidget({
   const showVolumeRef = useRef(showVolume)
   showVolumeRef.current = showVolume
 
+  // Apply scale mode changes
+  useEffect(() => {
+    if (chartDisposedRef.current || !chartRef.current) return
+    const chart = chartRef.current
+
+    const modeMap: Record<ScaleMode, PriceScaleMode> = {
+      normal: PriceScaleMode.Normal,
+      log: PriceScaleMode.Logarithmic,
+      percent: PriceScaleMode.Percentage,
+      indexed: PriceScaleMode.IndexedTo100,
+    }
+
+    try {
+      chart.priceScale('right').applyOptions({
+        mode: modeMap[scaleMode],
+      })
+    } catch (e) {
+      console.warn('Failed to apply scale mode:', e)
+    }
+  }, [scaleMode])
+
+  // Handle chart type changes by recreating the main series
+  useEffect(() => {
+    if (chartDisposedRef.current || !chartRef.current || candles.length === 0) return
+    if (chartType === currentChartTypeRef.current) return
+
+    const chart = chartRef.current
+
+    // Remove old main series
+    if (mainSeriesRef.current) {
+      try { chart.removeSeries(mainSeriesRef.current) } catch { /* ignore */ }
+      mainSeriesRef.current = null
+    }
+
+    // Create new series based on chart type
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let newSeries: ISeriesApi<any>
+
+      if (chartType === 'candles' || chartType === 'hollow') {
+        newSeries = chart.addSeries(CandlestickSeries, {
+          upColor: chartType === 'hollow' ? 'transparent' : '#26a69a',
+          downColor: chartType === 'hollow' ? 'transparent' : '#ef5350',
+          borderUpColor: '#26a69a',
+          borderDownColor: '#ef5350',
+          wickUpColor: '#26a69a',
+          wickDownColor: '#ef5350',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        })
+        const chartCandles = candles.map(c => ({
+          time: c.time as UTCTimestamp,
+          open: c.open, high: c.high, low: c.low, close: c.close,
+        }))
+        newSeries.setData(chartCandles)
+      } else if (chartType === 'bars' || chartType === 'hlc') {
+        newSeries = chart.addSeries(BarSeries, {
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          openVisible: chartType !== 'hlc',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        })
+        const chartBars = candles.map(c => ({
+          time: c.time as UTCTimestamp,
+          open: c.open, high: c.high, low: c.low, close: c.close,
+        }))
+        newSeries.setData(chartBars)
+      } else if (chartType === 'line') {
+        newSeries = chart.addSeries(LineSeries, {
+          color: '#2962ff',
+          lineWidth: 2,
+          lastValueVisible: false,
+          priceLineVisible: false,
+        })
+        const lineData = candles.map(c => ({
+          time: c.time as UTCTimestamp,
+          value: c.close,
+        }))
+        newSeries.setData(lineData)
+      } else if (chartType === 'area') {
+        newSeries = chart.addSeries(AreaSeries, {
+          lineColor: '#2962ff',
+          topColor: 'rgba(41, 98, 255, 0.4)',
+          bottomColor: 'rgba(41, 98, 255, 0.0)',
+          lineWidth: 2,
+          lastValueVisible: false,
+          priceLineVisible: false,
+        })
+        const areaData = candles.map(c => ({
+          time: c.time as UTCTimestamp,
+          value: c.close,
+        }))
+        newSeries.setData(areaData)
+      } else if (chartType === 'baseline') {
+        const firstClose = candles[0]?.close ?? 0
+        newSeries = chart.addSeries(BaselineSeries, {
+          baseValue: { type: 'price', price: firstClose },
+          topLineColor: '#26a69a',
+          topFillColor1: 'rgba(38, 166, 154, 0.4)',
+          topFillColor2: 'rgba(38, 166, 154, 0.0)',
+          bottomLineColor: '#ef5350',
+          bottomFillColor1: 'rgba(239, 83, 80, 0.0)',
+          bottomFillColor2: 'rgba(239, 83, 80, 0.4)',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        })
+        const baselineData = candles.map(c => ({
+          time: c.time as UTCTimestamp,
+          value: c.close,
+        }))
+        newSeries.setData(baselineData)
+      } else {
+        // Default to candlestick
+        newSeries = chart.addSeries(CandlestickSeries, {
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          borderUpColor: '#26a69a',
+          borderDownColor: '#ef5350',
+          wickUpColor: '#26a69a',
+          wickDownColor: '#ef5350',
+          lastValueVisible: false,
+          priceLineVisible: false,
+        })
+        const chartCandles = candles.map(c => ({
+          time: c.time as UTCTimestamp,
+          open: c.open, high: c.high, low: c.low, close: c.close,
+        }))
+        newSeries.setData(chartCandles)
+      }
+
+      mainSeriesRef.current = newSeries
+      currentChartTypeRef.current = chartType
+    } catch (e) {
+      console.warn('Failed to create new chart series:', e)
+    }
+  }, [chartType, candles])
+
   // Update chart when candles change
   useEffect(() => {
     if (chartDisposedRef.current) return
-    if (!candleSeriesRef.current || !volumeSeriesRef.current || candles.length === 0) return
+    if (!mainSeriesRef.current || !volumeSeriesRef.current || candles.length === 0) return
 
     const currentEarliestTime = candles[0].time
     const currentLatestTime = candles[candles.length - 1].time
@@ -240,19 +392,32 @@ export function CandlestickWidget({
       (lastTimeRef.current !== null && currentLatestTime < lastTimeRef.current) ||
       Math.abs(candles.length - lastCandleCountRef.current) > 5
 
+    // Check if current chart type uses OHLC or simple value format
+    const currentType = currentChartTypeRef.current
+    const isOHLCType = currentType === 'candles' || currentType === 'hollow' || currentType === 'bars' || currentType === 'hlc'
+
     try {
       if (isReset) {
-        const chartCandles = candles.map(c => ({
-          time: c.time as UTCTimestamp,
-          open: c.open, high: c.high, low: c.low, close: c.close,
-        }))
         const chartVolume = candles.map(c => ({
           time: c.time as UTCTimestamp,
           value: c.volume ?? 0,
-          color: c.close >= c.open ? '#22c55e80' : '#ef444480',
+          color: c.close >= c.open ? '#26a69a80' : '#ef535080',
         }))
 
-        candleSeriesRef.current.setData(chartCandles)
+        if (isOHLCType) {
+          const chartCandles = candles.map(c => ({
+            time: c.time as UTCTimestamp,
+            open: c.open, high: c.high, low: c.low, close: c.close,
+          }))
+          mainSeriesRef.current.setData(chartCandles)
+        } else {
+          const lineData = candles.map(c => ({
+            time: c.time as UTCTimestamp,
+            value: c.close,
+          }))
+          mainSeriesRef.current.setData(lineData)
+        }
+
         if (showVolumeRef.current) {
           volumeSeriesRef.current.setData(chartVolume)
         } else {
@@ -270,16 +435,23 @@ export function CandlestickWidget({
       } else {
         const lastCandle = candles[candles.length - 1]
         if (lastTimeRef.current === null || lastCandle.time >= lastTimeRef.current) {
-          candleSeriesRef.current.update({
-            time: lastCandle.time as UTCTimestamp,
-            open: lastCandle.open, high: lastCandle.high,
-            low: lastCandle.low, close: lastCandle.close,
-          })
+          if (isOHLCType) {
+            mainSeriesRef.current.update({
+              time: lastCandle.time as UTCTimestamp,
+              open: lastCandle.open, high: lastCandle.high,
+              low: lastCandle.low, close: lastCandle.close,
+            })
+          } else {
+            mainSeriesRef.current.update({
+              time: lastCandle.time as UTCTimestamp,
+              value: lastCandle.close,
+            })
+          }
           if (showVolumeRef.current) {
             volumeSeriesRef.current.update({
               time: lastCandle.time as UTCTimestamp,
               value: lastCandle.volume ?? 0,
-              color: lastCandle.close >= lastCandle.open ? '#22c55e80' : '#ef444480',
+              color: lastCandle.close >= lastCandle.open ? '#26a69a80' : '#ef535080',
             })
           }
           lastCandleCountRef.current = candles.length
@@ -301,7 +473,7 @@ export function CandlestickWidget({
       const chartVolume = candles.map(c => ({
         time: c.time as UTCTimestamp,
         value: c.volume ?? 0,
-        color: c.close >= c.open ? '#22c55e80' : '#ef444480',
+        color: c.close >= c.open ? '#26a69a80' : '#ef535080',
       }))
       try { volumeSeriesRef.current.setData(chartVolume) } catch { /* ignore */ }
     }

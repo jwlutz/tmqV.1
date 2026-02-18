@@ -33,7 +33,7 @@ export function KPIGrid({ kpis }: KPIGridProps) {
       />
       <KPICard
         label="Total Return"
-        value={kpis.totalReturn.toFixed(0)}
+        value={kpis.totalReturn.toFixed(1)}
         suffix="%"
         trend={kpis.totalReturn > 0 ? 'positive' : 'negative'}
       />

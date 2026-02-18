@@ -4,8 +4,10 @@ import 'flexlayout-react/style/dark.css'
 import { ChartTabContent } from './ChartTabContent'
 import { ChatSidebarContent } from './ChatPaneContent'
 import { CodeTabContent } from './CodeTabContent'
+import { BacktestResults } from '../backtest/BacktestResults'
+import { useBacktest } from '../../context'
 
-type ComponentType = 'chart' | 'chat' | 'code'
+type ComponentType = 'chart' | 'chat' | 'code' | 'backtest'
 
 // Default model: single tabset with all three tabs
 const DEFAULT_MODEL: IJsonModel = {
@@ -92,6 +94,8 @@ function factory(node: TabNode): React.ReactNode {
       return <ChatSidebarContent />
     case 'code':
       return <CodeTabContent tabId={tabId} />
+    case 'backtest':
+      return <BacktestResults />
     default:
       return (
         <div className="flex items-center justify-center h-full text-[var(--text-tertiary)]">
@@ -103,10 +107,51 @@ function factory(node: TabNode): React.ReactNode {
 
 export function FlexWorkspace() {
   const modelRef = useRef<Model>(loadModel())
+  const { backtestResult } = useBacktest()
+  const prevResultRef = useRef<typeof backtestResult>(null)
 
   const handleModelChange = useCallback((model: Model) => {
     saveModel(model)
   }, [])
+
+  // Auto-open backtest tab when new results arrive
+  useEffect(() => {
+    if (backtestResult && backtestResult !== prevResultRef.current) {
+      prevResultRef.current = backtestResult
+      const model = modelRef.current
+
+      // Check if backtest tab already exists
+      let hasBacktestTab = false
+      model.visitNodes(node => {
+        if (node.getType() === 'tab' && (node as TabNode).getComponent() === 'backtest') {
+          hasBacktestTab = true
+        }
+      })
+
+      if (!hasBacktestTab) {
+        // Add new backtest tab
+        const tabset = model.getActiveTabset() || model.getFirstTabSet()
+        if (tabset) {
+          model.doAction(
+            Actions.addNode(
+              { type: 'tab', name: 'Backtest', component: 'backtest', id: 'tab-backtest' },
+              tabset.getId(),
+              DockLocation.CENTER,
+              -1,
+              true
+            )
+          )
+        }
+      } else {
+        // Select existing backtest tab
+        model.visitNodes(node => {
+          if (node.getType() === 'tab' && (node as TabNode).getComponent() === 'backtest') {
+            model.doAction(Actions.selectTab(node.getId()))
+          }
+        })
+      }
+    }
+  }, [backtestResult])
 
   // Expose addTab for TopBar via window (simple approach for demo)
   useEffect(() => {

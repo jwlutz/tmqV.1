@@ -15,7 +15,7 @@ function mapKPIs(metrics: APIBacktestResult['metrics']): BacktestKPIs {
     winRate: metrics.win_rate * 100,
     totalTrades: metrics.total_trades,
     profitFactor: metrics.profit_factor,
-    sortinoRatio: 0,                     // backend doesn't provide sortino
+    sortinoRatio: metrics.sortino,
     totalReturn: metrics.total_return * 100,
   };
 }

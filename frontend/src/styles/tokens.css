@@ -1,13 +1,13 @@
 :root {
-  /* Background scale */
-  --bg-darkest: #0b0f19;
-  --bg-dark: #0f1420;
-  --bg-darker: #0d1119;
-  --bg-medium: #141925;
+  /* Background scale - TradingView dark theme */
+  --bg-darkest: #131722;
+  --bg-dark: #1e222d;
+  --bg-darker: #181c27;
+  --bg-medium: #1e222d;
 
-  /* Accent colors */
-  --green-up: #22c55e;
-  --red-down: #ef4444;
+  /* Accent colors - TradingView palette */
+  --green-up: #26a69a;
+  --red-down: #ef5350;
 
   /* Borders */
   --border: rgba(255, 255, 255, 0.06);
