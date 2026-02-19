@@ -8,6 +8,8 @@ import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import type { ChartTabState } from '../../components/workspace/ChartTabContent';
 // Side-effect import to get the window type augmentation
 import '../../components/workspace/ChartTabContent';
+// Import the helper function for testing
+import { getActiveChartState } from '../useActiveChartState';
 
 /**
  * Helper to simulate ChartTabContent registering its state.
@@ -344,6 +346,59 @@ describe('Edge Cases', () => {
     expect(context.chartPanes).toHaveLength(1);
     // Active pane should be undefined since the ID doesn't match
     expect(context.activePane).toBeUndefined();
+
+    cleanup();
+  });
+});
+
+describe('getActiveChartState helper (used by CodePanel)', () => {
+  beforeEach(() => {
+    window.__chartSetSymbol = undefined;
+    window.__chartSetWidgetType = undefined;
+    window.__chartSetInterval = undefined;
+    window.__chartGetState = undefined;
+    window.__activeChartTabId = undefined;
+  });
+
+  test('returns default state when no registry exists', () => {
+    const state = getActiveChartState();
+    expect(state.symbol).toBe('BTC-USD');
+    expect(state.interval).toBe('1d');
+    expect(state.widgetType).toBe('candlestick');
+    expect(state.tabId).toBeUndefined();
+  });
+
+  test('returns active tab state from registry', () => {
+    const cleanup = registerChartTab('my-tab', {
+      symbol: 'AAPL',
+      interval: '4h',
+      widgetType: 'net_liquidity',
+    });
+
+    const state = getActiveChartState();
+    expect(state.symbol).toBe('AAPL');
+    expect(state.interval).toBe('4h');
+    expect(state.widgetType).toBe('net_liquidity');
+    expect(state.tabId).toBe('my-tab');
+
+    cleanup();
+  });
+
+  test('reflects state changes immediately', () => {
+    const cleanup = registerChartTab('tab-1', {
+      symbol: 'BTC-USD',
+      interval: '1d',
+      widgetType: 'candlestick',
+    });
+
+    // Initial state
+    expect(getActiveChartState().symbol).toBe('BTC-USD');
+
+    // Change symbol via setter
+    window.__chartSetSymbol?.get('tab-1')?.('MSFT');
+
+    // Should reflect immediately
+    expect(getActiveChartState().symbol).toBe('MSFT');
 
     cleanup();
   });

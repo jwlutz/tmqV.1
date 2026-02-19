@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
-import { useCodePanel, useChartLayout, useInterval, useBacktest, APIBacktestResult } from '../../context'
+import { useCodePanel, useBacktest, APIBacktestResult } from '../../context'
 import { runCustomBacktest, submitFeatureRequest } from '../../api/client'
+import { getActiveChartState } from '../../hooks/useActiveChartState'
 
 const DEFAULT_CODE = `#  _____ _           _   _       __  __          ___                   _
 # |_   _| |__   __ _| |_( )___  |  \/  |_   _   / _ \\ _   _  __ _ _ __ | |_
@@ -35,16 +36,16 @@ function getDateRange(interval: string): { start: string; end: string } {
 
 export function CodePanel() {
   const { codePanelOpen, setCodePanelOpen, sandboxCode, setSandboxCode } = useCodePanel()
-  const { panes, activePaneId } = useChartLayout()
-  const { interval } = useInterval()
   const { setBacktestResult } = useBacktest()
   const [isRunning, setIsRunning] = useState(false)
   const [lastMetrics, setLastMetrics] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const code = sandboxCode || DEFAULT_CODE
-  const activePane = panes.find(p => p.id === activePaneId)
-  const activeSymbol = activePane?.symbol || 'BTC-USD'
+  // Read fresh state from window registry at render time
+  const chartState = getActiveChartState()
+  const activeSymbol = chartState.symbol
+  const interval = chartState.interval
 
   const handleRun = useCallback(async () => {
     if (isRunning) return
