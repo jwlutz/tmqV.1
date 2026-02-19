@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+import time
 from datetime import datetime, timedelta
 from typing import Protocol
 
 import ccxt
 import pandas as pd
 import yfinance as yf
+
+logger = logging.getLogger(__name__)
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
@@ -17,20 +21,79 @@ class DataProvider(Protocol):
 
 
 class YFinanceProvider:
+    MAX_RETRIES = 3
+    RETRY_DELAYS = [1, 2, 4]  # Exponential backoff in seconds
+
     def fetch_ohlcv(self, symbol: str, interval: str, start: str, end: str) -> pd.DataFrame:
-        df = yf.download(symbol, start=start, end=end, interval=interval, multi_level_index=False, progress=False)
-        df = df.reset_index()
-        # Normalize column names to lowercase
-        df.columns = [c.lower() for c in df.columns]
-        # Convert date column to ISO string
-        df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
-        df = df[["date", "open", "high", "low", "close", "volume"]]
-        # Ensure float64 for numeric columns
-        for col in ["open", "high", "low", "close", "volume"]:
-            df[col] = df[col].astype("float64")
-        df = df.dropna().reset_index(drop=True)
-        df = df.sort_values("date").reset_index(drop=True)
-        return df
+        empty_df = pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
+
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                df = yf.download(
+                    symbol, start=start, end=end, interval=interval,
+                    multi_level_index=False, progress=False
+                )
+
+                # Check if download returned empty DataFrame
+                if df.empty:
+                    if attempt < self.MAX_RETRIES - 1:
+                        delay = self.RETRY_DELAYS[attempt]
+                        logger.warning(
+                            f"yfinance returned empty DataFrame for {symbol}, "
+                            f"retrying in {delay}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                        )
+                        time.sleep(delay)
+                        continue
+                    else:
+                        logger.warning(
+                            f"yfinance returned empty DataFrame for {symbol} after "
+                            f"{self.MAX_RETRIES} attempts, returning empty result"
+                        )
+                        return empty_df
+
+                df = df.reset_index()
+                # Normalize column names to lowercase
+                df.columns = [c.lower() for c in df.columns]
+
+                # Handle missing date column (yfinance may use 'index' or other names)
+                if "date" not in df.columns:
+                    # Try common alternatives
+                    for alt in ["index", "datetime", "timestamp"]:
+                        if alt in df.columns:
+                            df = df.rename(columns={alt: "date"})
+                            break
+                    else:
+                        logger.warning(
+                            f"yfinance returned DataFrame without recognizable date column "
+                            f"for {symbol}. Columns: {list(df.columns)}"
+                        )
+                        return empty_df
+
+                # Convert date column to ISO string
+                df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+                df = df[["date", "open", "high", "low", "close", "volume"]]
+                # Ensure float64 for numeric columns
+                for col in ["open", "high", "low", "close", "volume"]:
+                    df[col] = df[col].astype("float64")
+                df = df.dropna().reset_index(drop=True)
+                df = df.sort_values("date").reset_index(drop=True)
+                return df
+
+            except Exception as e:
+                if attempt < self.MAX_RETRIES - 1:
+                    delay = self.RETRY_DELAYS[attempt]
+                    logger.warning(
+                        f"yfinance error for {symbol}: {e}, "
+                        f"retrying in {delay}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(
+                        f"yfinance failed for {symbol} after {self.MAX_RETRIES} attempts: {e}"
+                    )
+                    return empty_df
+
+        return empty_df
 
 class CCXTProvider:
     def __init__(self, exchange_id: str = "coinbase"):

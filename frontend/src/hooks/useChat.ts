@@ -13,8 +13,9 @@ export interface UseChatOptions {
   onCustomCode?: (code: string) => void;
   /** Callback for UI actions from AI (widget changes, layout changes, etc.) */
   onUIAction?: (action: UIAction) => void;
-  /** Current chart context (symbol, interval) for state-aware AI */
-  context?: ChatContext;
+  /** Current chart context (symbol, interval) for state-aware AI.
+   * Can be a static object or a getter function for fresh context at send time. */
+  context?: ChatContext | (() => ChatContext);
   /** Request confirmation before executing AI actions */
   requestConfirmation?: (action: Omit<PendingAction, 'id'>) => Promise<{ approved: boolean; feedback?: string }>;
 }
@@ -78,9 +79,10 @@ export function useChat({ apiKey, model, useOpenRouter = false, serverProvider =
   onUIActionRef.current = onUIAction;
   const requestConfirmationRef = useRef(requestConfirmation);
   requestConfirmationRef.current = requestConfirmation;
-  // Store context in ref to avoid stale closures but keep it current
+  // Store context getter - supports both static objects and getter functions for fresh context
   const contextRef = useRef(context);
   contextRef.current = context;
+  const getContext = () => typeof contextRef.current === 'function' ? contextRef.current() : contextRef.current;
   // Queue feedback message to be sent after current stream ends
   const pendingFeedbackRef = useRef<string | null>(null);
 
@@ -137,7 +139,7 @@ export function useChat({ apiKey, model, useOpenRouter = false, serverProvider =
       // Use server provider or custom API key
       const keyOrProvider = serverProvider || apiKey;
       const isServer = !!serverProvider;
-      for await (const event of streamChat(historyRef.current, keyOrProvider, model, useOpenRouter, isServer, contextRef.current, signal)) {
+      for await (const event of streamChat(historyRef.current, keyOrProvider, model, useOpenRouter, isServer, getContext(), signal)) {
         switch (event.type) {
           case 'text':
             if (event.content) {

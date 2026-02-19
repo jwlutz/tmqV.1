@@ -1,8 +1,8 @@
-import { useCallback, useMemo } from 'react';
-import { useBacktest, useChatSettings, useCodePanel, useChartLayout, useInterval } from '../context';
+import { useCallback, useRef } from 'react';
+import { useBacktest, useChatSettings, useCodePanel, useChartLayout } from '../context';
 import { useActionConfirmation } from '../context/ActionConfirmationContext';
 import { useChat } from './useChat';
-import { ChatContext, UIAction } from '../api/client';
+import { ChatContext, UIAction, ChartPaneInfo } from '../api/client';
 import type { WidgetType } from '../widgets/types';
 import type { ChartLayout } from '../context';
 
@@ -14,6 +14,42 @@ const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
   xai: 'grok-2',
   openrouter: 'anthropic/claude-haiku-4.5',
 };
+
+/**
+ * Reads chart tab state from window registry for AI context awareness.
+ * This is called at message-send time to get fresh state.
+ */
+function getChartContextFromRegistry(layout: ChartLayout, codePanelOpen: boolean): ChatContext {
+  const chartPanes: ChartPaneInfo[] = [];
+  const activeTabId = window.__activeChartTabId;
+  let activePaneInfo: ChatContext['activePane'] = undefined;
+
+  // Read from window registry for live chart tab state
+  window.__chartGetState?.forEach((getState, tabId) => {
+    const state = getState();
+    const paneInfo: ChartPaneInfo = {
+      id: tabId,
+      symbol: state.symbol,
+      widgetType: state.widgetType,
+    };
+    chartPanes.push(paneInfo);
+
+    if (tabId === activeTabId) {
+      activePaneInfo = {
+        id: tabId,
+        symbol: state.symbol,
+        widgetType: state.widgetType,
+        interval: state.interval,
+      };
+    }
+  });
+
+  return {
+    activePane: activePaneInfo,
+    chartPanes,
+    workspace: { layout, codePanelOpen },
+  };
+}
 
 /**
  * Shared hook that combines useChat with UI action handling and workspace context.
@@ -28,30 +64,20 @@ export function useChatWithUIActions() {
   } = useChatSettings();
   const { requestConfirmation } = useActionConfirmation();
 
-  // Get chart layout and workspace state for AI context
-  const { panes, activePaneId, layout, setLayout, applyLayoutPreset } = useChartLayout();
-  const { interval } = useInterval();
+  // Get workspace state for AI context (layout is from AppContext, chart state from window registry)
+  const { layout, setLayout, applyLayoutPreset } = useChartLayout();
   const { codePanelOpen, setCodePanelOpen, setSandboxCode } = useCodePanel();
-  const activePane = panes.find(p => p.id === activePaneId);
 
-  // Build expanded chat context with full workspace state
-  const chatContext: ChatContext = useMemo(() => ({
-    activePane: activePane ? {
-      id: activePane.id,
-      symbol: activePane.symbol,
-      widgetType: activePane.widgetType,
-      interval: interval,
-    } : undefined,
-    chartPanes: panes.map(p => ({
-      id: p.id,
-      symbol: p.symbol,
-      widgetType: p.widgetType,
-    })),
-    workspace: {
-      layout: layout,
-      codePanelOpen: codePanelOpen,
-    },
-  }), [activePane, panes, layout, codePanelOpen, interval]);
+  // Create stable refs for values used in getter function
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const codePanelOpenRef = useRef(codePanelOpen);
+  codePanelOpenRef.current = codePanelOpen;
+
+  // Context getter function - called at message-send time for fresh state
+  const getContext = useCallback((): ChatContext => {
+    return getChartContextFromRegistry(layoutRef.current, codePanelOpenRef.current);
+  }, []);
 
   // Compute effective API key and model based on provider selection
   const effectiveApiKey = useOpenRouter ? openRouterApiKey : apiKey;
@@ -154,7 +180,7 @@ export function useChatWithUIActions() {
     onBacktestResult: setBacktestResult,
     onCustomCode: handleCustomCode,
     onUIAction: handleUIAction,
-    context: chatContext,
+    context: getContext,
     requestConfirmation,
   });
 
