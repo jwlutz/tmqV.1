@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ProviderCard } from '../ProviderCard'
 import type { ProviderInfo } from '../../../hooks/useSettings'
+import { useActionConfirmation, ActionType } from '../../../context/ActionConfirmationContext'
 
 interface AISectionProps {
   providers: Record<string, ProviderInfo>
@@ -223,6 +224,9 @@ export function AISection({ providers, settings, onUpdate, onTestConnection }: A
         </div>
       )}
 
+      {/* Execution Mode */}
+      <ExecutionModeSection />
+
       {/* Info */}
       <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-start gap-3">
         <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,6 +240,90 @@ export function AISection({ providers, settings, onUpdate, onTestConnection }: A
           </p>
         </div>
       </div>
+    </div>
+  )
+}
+
+const ACTION_TYPE_LABELS: Record<ActionType, { label: string; icon: string }> = {
+  backtest: { label: 'Backtests', icon: '\u{1F9EA}' },
+  indicator: { label: 'Indicators', icon: '\u{1F4C8}' },
+  widget: { label: 'Widget Changes', icon: '\u{1F5BC}' },
+  code: { label: 'Code Execution', icon: '\u{1F4BB}' },
+}
+
+function ExecutionModeSection() {
+  const { preferences, setMode, setAutoApprove } = useActionConfirmation()
+
+  return (
+    <div className="p-4 bg-[var(--bg-dark)] rounded-lg border border-[var(--border)] space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-medium text-[var(--text-primary)]">AI Action Confirmation</h3>
+          <p className="text-sm text-[var(--text-secondary)]">
+            Control when TMQ asks before executing actions
+          </p>
+        </div>
+      </div>
+
+      {/* Mode Toggle */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setMode('ask')}
+          className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            preferences.mode === 'ask'
+              ? 'bg-[var(--green-up)] text-[var(--bg-darkest)]'
+              : 'bg-[var(--bg-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          Ask Before Executing
+        </button>
+        <button
+          onClick={() => setMode('auto')}
+          className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            preferences.mode === 'auto'
+              ? 'bg-[var(--green-up)] text-[var(--bg-darkest)]'
+              : 'bg-[var(--bg-medium)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          Auto-Execute All
+        </button>
+      </div>
+
+      {/* Per-action toggles (only show in 'ask' mode) */}
+      {preferences.mode === 'ask' && (
+        <div className="pt-4 border-t border-[var(--border)] space-y-3">
+          <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider">
+            Auto-approve these action types:
+          </p>
+          {(Object.keys(ACTION_TYPE_LABELS) as ActionType[]).map(type => {
+            const { label, icon } = ACTION_TYPE_LABELS[type]
+            const isAutoApproved = preferences.autoApprove[type]
+            return (
+              <label
+                key={type}
+                className="flex items-center justify-between py-2 px-3 rounded-lg bg-[var(--bg-medium)] cursor-pointer hover:bg-white/5 transition-colors"
+              >
+                <span className="flex items-center gap-2 text-sm text-[var(--text-primary)]">
+                  <span>{icon}</span>
+                  {label}
+                </span>
+                <button
+                  onClick={() => setAutoApprove(type, !isAutoApproved)}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    isAutoApproved ? 'bg-[var(--green-up)]' : 'bg-[var(--bg-darkest)] border border-[var(--border)]'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                      isAutoApproved ? 'translate-x-5' : ''
+                    }`}
+                  />
+                </button>
+              </label>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

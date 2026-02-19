@@ -12,14 +12,18 @@ export interface Candle {
   volume?: number
 }
 
-export type WSStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
+export type DataStatus = 'idle' | 'loading' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'no_data'
 
 export interface MarketDataState {
   candles: Candle[]
   currentCandle: Candle | null
-  status: WSStatus
+  status: DataStatus
+  statusMessage: string
   symbol: string
 }
+
+// For backward compatibility
+export type WSStatus = DataStatus
 
 // Coinbase WebSocket
 const COINBASE_WS = 'wss://ws-feed.exchange.coinbase.com'
@@ -78,7 +82,8 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
   const coinbaseSymbol = toCoinbaseSymbol(symbol)
   const [candles, setCandles] = useState<Candle[]>([])
   const [currentCandle, setCurrentCandle] = useState<Candle | null>(null)
-  const [status, setStatus] = useState<WSStatus>(isCrypto ? 'connecting' : 'connected')
+  const [status, setStatus] = useState<DataStatus>('loading')
+  const [statusMessage, setStatusMessage] = useState<string>(`Loading ${symbol}...`)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMoreHistory, setHasMoreHistory] = useState(true)
   const candlesRef = useRef(candles)
@@ -87,44 +92,78 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
   const lastUpdateRef = useRef<number>(0)
   const isCryptoRef = useRef(isCrypto) // Track current crypto state to prevent stale WebSocket callbacks
   isCryptoRef.current = isCrypto
+  const symbolRef = useRef(symbol) // Track symbol for status messages
+  symbolRef.current = symbol
 
   // Clear stale data and fetch fresh history when symbol changes
   useEffect(() => {
     setCandles([])
     setCurrentCandle(null)
     setHasMoreHistory(true)
-    if (!isCrypto) setStatus('connected')
+    setStatus('loading')
+    setStatusMessage(`Loading ${symbol}...`)
     let cancelled = false
 
     async function loadHistory() {
       try {
         if (isCrypto && COINBASE_INTERVALS.has(interval)) {
           // Crypto with Coinbase-supported interval: use Coinbase REST
+          if (!cancelled) {
+            setStatusMessage(`Fetching ${coinbaseSymbol} history...`)
+          }
           const history = await fetchHistoricalCandles(coinbaseSymbol, interval, 300)
-          if (!cancelled && history.length > 0) {
-            setCandles(history)
+          if (!cancelled) {
+            if (history.length > 0) {
+              setCandles(history)
+              // For crypto, status will be updated by WebSocket connection
+              setStatusMessage('Connecting to live feed...')
+            } else {
+              setStatus('no_data')
+              setStatusMessage(`No data available for ${coinbaseSymbol}`)
+            }
           }
         } else {
           // Equity or non-Coinbase interval: use backend API
           const { start, end } = getDateRange(interval)
           const apiSymbol = isCrypto ? coinbaseSymbol : symbol
+          if (!cancelled) {
+            setStatusMessage(`Fetching ${symbol} data...`)
+          }
           const res = await fetchOHLCV(apiSymbol, interval, start, end, equitySource)
-          if (!cancelled && res.data?.length > 0) {
-            const history: Candle[] = res.data.map((d: { date: string; open: number; high: number; low: number; close: number; volume: number }) => ({
-              time: Math.floor(new Date(d.date).getTime() / 1000),
-              open: d.open,
-              high: d.high,
-              low: d.low,
-              close: d.close,
-              volume: d.volume,
-            }))
-            setCandles(history)
-            if (!isCrypto) setStatus('connected')
+          if (!cancelled) {
+            if (res.data?.length > 0) {
+              const history: Candle[] = res.data.map((d: { date: string; open: number; high: number; low: number; close: number; volume: number }) => ({
+                time: Math.floor(new Date(d.date).getTime() / 1000),
+                open: d.open,
+                high: d.high,
+                low: d.low,
+                close: d.close,
+                volume: d.volume,
+              }))
+              setCandles(history)
+              if (!isCrypto) {
+                setStatus('connected')
+                setStatusMessage('')
+              }
+            } else {
+              setStatus('no_data')
+              setStatusMessage(`No data available for ${symbol}`)
+            }
           }
         }
       } catch (error) {
         console.error('Failed to fetch historical candles:', error)
-        if (!cancelled && !isCrypto) setStatus('error')
+        if (!cancelled) {
+          setStatus('error')
+          const errMsg = error instanceof Error ? error.message : 'Unknown error'
+          if (errMsg.includes('404') || errMsg.includes('Not Found')) {
+            setStatusMessage(`Symbol "${symbol}" not found`)
+          } else if (errMsg.includes('network') || errMsg.includes('fetch')) {
+            setStatusMessage('Network error. Check your connection.')
+          } else {
+            setStatusMessage(`Failed to load ${symbol}`)
+          }
+        }
       }
     }
 
@@ -200,7 +239,17 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
       // Only update status if still in crypto mode (prevents stale callbacks after switching to equity)
       onStatusChange: (newStatus) => {
         if (isCryptoRef.current) {
-          setStatus(newStatus)
+          setStatus(newStatus as DataStatus)
+          // Set contextual messages for WebSocket states
+          if (newStatus === 'connecting') {
+            setStatusMessage(`Connecting to ${symbolRef.current} live feed...`)
+          } else if (newStatus === 'connected') {
+            setStatusMessage('')
+          } else if (newStatus === 'disconnected') {
+            setStatusMessage('Disconnected. Reconnecting...')
+          } else if (newStatus === 'error') {
+            setStatusMessage('Connection error')
+          }
         }
       },
       onConnect: () => {
@@ -289,5 +338,5 @@ export function useMarketData(symbol: string = 'BTC-USD', interval: string = '1m
     }
   }, [coinbaseSymbol, symbol, interval, isLoadingMore, hasMoreHistory, isCrypto, equitySource])
 
-  return { candles, currentCandle, status, symbol: isCrypto ? coinbaseSymbol : symbol, isCrypto, loadMoreHistory, isLoadingMore, hasMoreHistory }
+  return { candles, currentCandle, status, statusMessage, symbol: isCrypto ? coinbaseSymbol : symbol, isCrypto, loadMoreHistory, isLoadingMore, hasMoreHistory }
 }

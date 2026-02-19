@@ -19,6 +19,14 @@ def format_environment(env: dict) -> str:
 - Platform: thats_my_quant v2.0"""
 
 
+def format_capabilities(env: dict) -> str:
+    """Format data provider capabilities matrix in Markdown for GPT."""
+    matrix = env.get("capabilities_matrix", "")
+    if not matrix:
+        return ""
+    return matrix  # Already in markdown format from build_capabilities_matrix()
+
+
 def format_role() -> str:
     """Format role in Markdown."""
     return f"## Role\n{ROLE}"
@@ -72,8 +80,11 @@ def build_system_prompt(env: dict) -> str:
         "# TMQ Quant Assistant",
         format_environment(env),
         format_role(),
+        format_capabilities(env),
         format_tool_guidance(),
         format_constraints(),
         format_examples(),
     ]
+    # Filter out empty sections
+    sections = [s for s in sections if s]
     return "\n\n".join(sections)

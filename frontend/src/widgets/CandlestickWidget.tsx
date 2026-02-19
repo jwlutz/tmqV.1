@@ -43,7 +43,16 @@ export interface CandlestickWidgetProps {
 // Plot color variants for multi-plot indicators
 const MULTI_PLOT_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4']
 
+// Global registry for AI to toggle indicators on charts
+declare global {
+  interface Window {
+    __chartIndicatorToggle?: Map<string, (indicatorId: string) => void>;
+    __chartVolumeToggle?: Map<string, () => void>;
+  }
+}
+
 export function CandlestickWidget({
+  paneId,
   symbol,
   interval,
   macroOverlays = [],
@@ -56,7 +65,7 @@ export function CandlestickWidget({
   timeRange: _timeRange,
 }: CandlestickWidgetProps) {
   void _timeRange // Reserved for future time range presets
-  const { candles, status, isCrypto, loadMoreHistory, isLoadingMore } = useMarketData(symbol, interval)
+  const { candles, status, statusMessage, isCrypto, loadMoreHistory, isLoadingMore } = useMarketData(symbol, interval)
   const { stats: marketStats } = useMarketStats(symbol)
   const { providerCredentials } = useDataSettings()
 
@@ -120,6 +129,22 @@ export function CandlestickWidget({
   }, [selectedIds, availableIndicators, indicatorCategories, toggleIndicator,
       activeIndicators, showVolume, toggleVolume,
       customIndicators, addCustomIndicator, removeCustomIndicator])
+
+  // Expose indicator toggle for AI control via global registry
+  useEffect(() => {
+    if (!window.__chartIndicatorToggle) {
+      window.__chartIndicatorToggle = new Map()
+    }
+    if (!window.__chartVolumeToggle) {
+      window.__chartVolumeToggle = new Map()
+    }
+    window.__chartIndicatorToggle.set(paneId, toggleIndicator)
+    window.__chartVolumeToggle.set(paneId, toggleVolume)
+    return () => {
+      window.__chartIndicatorToggle?.delete(paneId)
+      window.__chartVolumeToggle?.delete(paneId)
+    }
+  }, [paneId, toggleIndicator, toggleVolume])
 
   // Bubble status up to ChartPane for connection dot
   useEffect(() => {
@@ -908,13 +933,28 @@ export function CandlestickWidget({
       <div className="relative flex-1 min-h-0">
         <div ref={containerRef} className="w-full h-full" />
 
-        {(status === 'connecting' || (candles.length < 5 && status !== 'error')) && (
-          <LoadingOverlay message={status === 'connecting' ? 'Connecting...' : 'Loading...'} />
+        {/* Loading states */}
+        {(status === 'loading' || status === 'connecting' || (candles.length < 5 && status !== 'error' && status !== 'no_data')) && (
+          <LoadingOverlay message={statusMessage || 'Loading...'} />
         )}
 
+        {/* No data state */}
+        {status === 'no_data' && candles.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-darkest)]/80">
+            <div className="text-center">
+              <p className="text-sm text-[var(--text-secondary)]">{statusMessage || `No data available for ${symbol}`}</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1">Try a different symbol or date range</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error state */}
         {status === 'error' && candles.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-sm text-[var(--red-down)]">Failed to load data for {symbol}</p>
+          <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-darkest)]/80">
+            <div className="text-center">
+              <p className="text-sm text-[var(--red-down)]">{statusMessage || `Failed to load ${symbol}`}</p>
+              <p className="text-xs text-[var(--text-tertiary)] mt-1">Check the symbol and try again</p>
+            </div>
           </div>
         )}
       </div>

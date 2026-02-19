@@ -6,11 +6,12 @@ import { ChatSidebarContent } from './ChatPaneContent'
 import { CodeTabContent } from './CodeTabContent'
 import { BacktestResults } from '../backtest/BacktestResults'
 import { RotContent } from '../rot/RotContent'
+import { SECPaneContent } from './SECPaneContent'
 import { useBacktest } from '../../context'
 
-type ComponentType = 'chart' | 'chat' | 'code' | 'backtest' | 'rot'
+type ComponentType = 'chart' | 'chat' | 'code' | 'backtest' | 'rot' | 'sec'
 
-// Default model: single tabset with all three tabs
+// Default model: Chart+Code on left (2/3), Chat on right (1/3)
 const DEFAULT_MODEL: IJsonModel = {
   global: {
     tabEnableClose: true,
@@ -28,28 +29,50 @@ const DEFAULT_MODEL: IJsonModel = {
     type: 'row',
     weight: 100,
     children: [
+      // Left column (2/3 width): Chart on top, Code below
       {
-        type: 'tabset',
-        weight: 100,
-        id: 'main-tabset',
+        type: 'row',
+        weight: 66,
         children: [
           {
-            type: 'tab',
-            name: 'Chart',
-            component: 'chart',
-            id: 'tab-chart',
+            type: 'tabset',
+            weight: 66,
+            id: 'chart-tabset',
+            children: [
+              {
+                type: 'tab',
+                name: 'Chart',
+                component: 'chart',
+                id: 'tab-chart',
+              },
+            ],
           },
+          {
+            type: 'tabset',
+            weight: 34,
+            id: 'code-tabset',
+            children: [
+              {
+                type: 'tab',
+                name: 'Code',
+                component: 'code',
+                id: 'tab-code',
+              },
+            ],
+          },
+        ],
+      },
+      // Right column (1/3 width): Chat
+      {
+        type: 'tabset',
+        weight: 34,
+        id: 'chat-tabset',
+        children: [
           {
             type: 'tab',
             name: 'Chat',
             component: 'chat',
             id: 'tab-chat',
-          },
-          {
-            type: 'tab',
-            name: 'Code',
-            component: 'code',
-            id: 'tab-code',
           },
         ],
       },
@@ -99,6 +122,8 @@ function factory(node: TabNode): React.ReactNode {
       return <BacktestResults />
     case 'rot':
       return <RotContent />
+    case 'sec':
+      return <SECPaneContent />
     default:
       return (
         <div className="flex items-center justify-center h-full text-[var(--text-tertiary)]">

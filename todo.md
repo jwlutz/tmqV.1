@@ -2,7 +2,7 @@
 **have demo ready for tomorrow**
 - that means MCP integration!!
 - test cases need to work:
-    - simple backtest
+    [x] simple backtest
     - have AI change the screen
     - have AI calculate indicator(s) and apply them to the chart
 
@@ -13,7 +13,7 @@
 - make volume a toggle/indicator!!
 [x] get AI contextually aware of what the user's pane looks like (symbol, interval, widget type passed to backend)
 - give AI ability to change the screens
-- ability to turn indicators on and off (and compare mode)
+[x] ability to turn indicators on and off (and compare mode)
 - custom code vision and execution ability
 - **see if lightweight charts does indicators**
 
@@ -26,10 +26,10 @@ example functions:
 - make sure it has access to all info on the page-- test this by asking it
 
 QOL:
-- ability to open and close windows (like BB terminal)
+[x] ability to open and close windows (like BB terminal)
 - make sure MCP can also open and close windows
 - MCP should also be able to switch chart to different windows
-- keep chart window modular
+[x] keep chart window modular
 [x] remove AI artifacts (live, green dot, remove emojis)
 [x] turn quick actions to examples
 [x] markdown rendering in chat panel (react-markdown + remark-gfm + tailwind typography)
@@ -44,9 +44,9 @@ backtester code functions
 ----------------------------------------
 
 **sammy todos**
-- indicators (see if tradingview package has them for free)
+[x] indicators (see if tradingview package has them for free)
 - fix normalization of charts
-- audit backtest results and give feedback/improve prompts/tools
+[x] audit backtest results and give feedback/improve prompts/tools
 
 **lutz todos**
 [x] spec out macro page

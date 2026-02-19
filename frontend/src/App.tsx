@@ -1,9 +1,10 @@
 import './App.css'
 import { AppProvider, useSettingsOverlay } from './context'
+import { ActionConfirmationProvider } from './context/ActionConfirmationContext'
 import { TopBar } from './components/layout'
 import { FlexWorkspace } from './components/workspace'
 import { SettingsOverlay } from './components/settings'
-import { ErrorBoundary } from './components/ui'
+import { ErrorBoundary, ActionConfirmationModal } from './components/ui'
 
 function AppContent() {
   const { settingsOpen, setSettingsOpen } = useSettingsOverlay()
@@ -15,6 +16,7 @@ function AppContent() {
         <FlexWorkspace />
       </ErrorBoundary>
       {settingsOpen && <SettingsOverlay onClose={() => setSettingsOpen(false)} />}
+      <ActionConfirmationModal />
     </div>
   )
 }
@@ -22,7 +24,9 @@ function AppContent() {
 function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <ActionConfirmationProvider>
+        <AppContent />
+      </ActionConfirmationProvider>
     </AppProvider>
   )
 }

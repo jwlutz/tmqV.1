@@ -2,6 +2,16 @@ import { useState, useCallback, useEffect } from 'react'
 import { ChartPane } from '../chart/ChartPane'
 import type { WidgetType, ChartLayout } from '../../context'
 
+// Extend window for AI-controlled chart state
+declare global {
+  interface Window {
+    __chartSetSymbol?: Map<string, (symbol: string) => void>;
+    __chartSetWidgetType?: Map<string, (widgetType: WidgetType) => void>;
+    __chartSetInterval?: Map<string, (interval: string) => void>;
+    __activeChartTabId?: string;
+  }
+}
+
 interface ChartTabContentProps {
   tabId: string
 }
@@ -63,7 +73,34 @@ export function ChartTabContent({ tabId }: ChartTabContentProps) {
   }, [])
 
   // Stub handlers for layout (not used in single-chart mode)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleLayoutChange = useCallback((_layout: ChartLayout) => {}, [])
+
+  // Register setters on window for AI control
+  useEffect(() => {
+    // Initialize maps if needed
+    if (!window.__chartSetSymbol) window.__chartSetSymbol = new Map();
+    if (!window.__chartSetWidgetType) window.__chartSetWidgetType = new Map();
+    if (!window.__chartSetInterval) window.__chartSetInterval = new Map();
+
+    // Register this tab's setters
+    window.__chartSetSymbol.set(tabId, handleSymbolChange);
+    window.__chartSetWidgetType.set(tabId, handleWidgetTypeChange);
+    window.__chartSetInterval.set(tabId, handleIntervalChange);
+
+    // Track this as active chart tab (most recently mounted/focused)
+    window.__activeChartTabId = tabId;
+
+    return () => {
+      // Cleanup on unmount
+      window.__chartSetSymbol?.delete(tabId);
+      window.__chartSetWidgetType?.delete(tabId);
+      window.__chartSetInterval?.delete(tabId);
+      if (window.__activeChartTabId === tabId) {
+        window.__activeChartTabId = undefined;
+      }
+    };
+  }, [tabId, handleSymbolChange, handleWidgetTypeChange, handleIntervalChange])
 
   return (
     <div className="h-full w-full">

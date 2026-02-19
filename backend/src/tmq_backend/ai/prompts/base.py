@@ -21,13 +21,23 @@ TOOL_GUIDANCE = {
     "tmq_macro": "Fetch macroeconomic data from FRED. Use for rates, inflation, employment, GDP, VIX, FX, money supply, credit spreads, commodities. Popular: FEDFUNDS, DGS10, T10Y2Y, CPIAUCSL, VIXCLS, UNRATE, GDP, M2SL, DCOILWTICO, DEXUSEU.",
     "tmq_macro_search": "Search FRED for economic data series by keyword when you don't know the exact series ID.",
     "tmq_macro_backtest": "Run a strategy conditioned on macro data. Use generate_signals(df, macro) where macro has FRED series columns aligned to trading dates. For regime-conditional strategies.",
+    # SEC tools
+    "tmq_sec_filings": "Get SEC filings (10-K, 10-Q, 8-K, etc.) for a specific ticker. O(1) cost.",
+    "tmq_sec_insider": "Get insider transactions (Form 4) for a specific ticker. O(1) cost.",
+    "tmq_sec_read": "Read full text of a specific SEC filing by accession number.",
+    "tmq_sec_scan": "MARKET-WIDE scan for insider activity. O(1) cost. PREFER THIS over iterating tickers. Returns all Form 4s filed in date range.",
+    "tmq_cluster_buying": "Find stocks with CLUSTER insider buying (multiple insiders buying same stock). O(1) cost. Use for high-conviction insider signals.",
+    # Universe tools
+    "tmq_universe": "Get list of ALL tradeable US stocks from Alpaca (~11k symbols). O(1) cost. Use when user wants 'all stocks' or needs a universe.",
+    # Meta tools
+    "tmq_capabilities": "Get the current data provider capabilities matrix. Use to explain what data is available.",
 }
 
 # Behavioral constraints
 CONSTRAINTS = [
     "Always use tools to get real data. Never fabricate numbers.",
     "When asked about a stock/crypto, fetch real data first.",
-    "IMPORTANT: Before running ANY backtest (tmq_backtest, tmq_backtest_custom, tmq_macro_backtest), ALWAYS ask the user for confirmation first. Show them the strategy name/type, symbol, date range, and key parameters you plan to use. Wait for their explicit approval before executing the backtest tool.",
+    "When asked to run a backtest, call the tool immediately. The UI will prompt the user for confirmation before execution.",
     "For backtests, explain results clearly: total return, sharpe ratio, max drawdown, win rate.",
     "When writing custom strategies, use only pandas, numpy, and pandas_ta_classic.",
     "Keep responses concise but insightful.",
@@ -57,7 +67,8 @@ EXAMPLES = [
     },
     {
         "user": "Backtest a moving average strategy on Apple",
-        "assistant_reasoning": "The user wants to evaluate an SMA crossover strategy on AAPL. Before running the backtest, I need to confirm the parameters with them.",
-        "assistant_response": "I'll run an **SMA crossover** backtest on **AAPL**. Here are the parameters:\n\n- **Symbol:** AAPL\n- **Strategy:** sma_crossover\n- **Date range:** 2023-01-01 to 2024-01-01 (1 year)\n- **Parameters:** fast=10, slow=30 (default)\n\nShould I proceed with this backtest?",
+        "assistant_reasoning": "The user wants to evaluate an SMA crossover strategy on AAPL. I'll call the backtest tool with sensible defaults. The UI will show the user a confirmation prompt.",
+        "tool_call": "tmq_backtest with symbol='AAPL', strategy='sma_crossover', start='2023-01-01', end='2024-01-01'",
+        "assistant_response": "Here are the results of the **SMA crossover** backtest on **AAPL**:\n\n| Metric | Value |\n|--------|-------|\n| Total Return | 15.2% |\n| Sharpe Ratio | 1.24 |\n| Max Drawdown | -8.3% |\n| Win Rate | 62% |",
     },
 ]

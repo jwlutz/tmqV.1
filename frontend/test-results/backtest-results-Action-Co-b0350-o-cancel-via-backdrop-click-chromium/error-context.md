@@ -1,0 +1,187 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link "thats_my_quant" [ref=e6] [cursor=pointer]:
+          - /url: https://github.com/jwlutz/tmqV.1
+        - button "Add" [ref=e8] [cursor=pointer]:
+          - img [ref=e9]
+          - generic [ref=e11]: Add
+          - img [ref=e12]
+      - button "Open settings" [ref=e15] [cursor=pointer]:
+        - img [ref=e16]
+    - generic [ref=e20]:
+      - generic [ref=e21]: FindBorderBarSize
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e27]:
+            - generic [ref=e31] [cursor=pointer]:
+              - generic [ref=e32]: Chart
+              - generic "Close" [ref=e33]:
+                - img [ref=e34]
+            - button "Maximize tab set" [ref=e38] [cursor=pointer]:
+              - img [ref=e39]
+          - generic [ref=e47]:
+            - generic [ref=e51] [cursor=pointer]:
+              - generic [ref=e52]: Code
+              - generic "Close" [ref=e53]:
+                - img [ref=e54]
+            - button "Maximize tab set" [ref=e58] [cursor=pointer]:
+              - img [ref=e59]
+        - generic [ref=e67]:
+          - generic [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Chat
+            - generic "Close" [ref=e73]:
+              - img [ref=e74]
+          - button "Maximize tab set" [ref=e78] [cursor=pointer]:
+            - img [ref=e79]
+      - generic [ref=e86]:
+        - generic [ref=e88]:
+          - button "📊" [ref=e90] [cursor=pointer]:
+            - generic [ref=e91]: 📊
+            - img [ref=e92]
+          - button "BTC-USD" [ref=e96] [cursor=pointer]:
+            - text: BTC-USD
+            - img [ref=e97]
+          - button "1D" [ref=e100] [cursor=pointer]:
+            - text: 1D
+            - img [ref=e101]
+          - button "🕯️" [ref=e104] [cursor=pointer]:
+            - generic [ref=e105]: 🕯️
+            - img [ref=e106]
+          - generic [ref=e108]:
+            - button "Lin" [ref=e109] [cursor=pointer]
+            - button "Log" [ref=e110] [cursor=pointer]
+            - button "%" [ref=e111] [cursor=pointer]
+          - button "Indicators" [ref=e113] [cursor=pointer]:
+            - img [ref=e114]
+            - text: Indicators
+            - img [ref=e116]
+          - button "Compare" [ref=e120] [cursor=pointer]:
+            - img [ref=e121]
+            - text: Compare
+            - img [ref=e123]
+          - generic [ref=e125]:
+            - button "1D" [ref=e126] [cursor=pointer]
+            - button "5D" [ref=e127] [cursor=pointer]
+            - button "1M" [ref=e128] [cursor=pointer]
+            - button "3M" [ref=e129] [cursor=pointer]
+            - button "6M" [ref=e130] [cursor=pointer]
+            - button "1Y" [ref=e131] [cursor=pointer]
+            - button "5Y" [ref=e132] [cursor=pointer]
+            - button "All" [ref=e133] [cursor=pointer]
+        - generic [ref=e137]:
+          - generic [ref=e138]:
+            - generic [ref=e139]:
+              - generic [ref=e140]: 66,478.41
+              - generic [ref=e141]: +58.63 (+0.09%)
+            - generic [ref=e142]: "|"
+            - generic [ref=e143]:
+              - generic [ref=e144]: O
+              - generic [ref=e145]: 66,419.78
+              - generic [ref=e146]: H
+              - generic [ref=e147]: 66,568.76
+              - generic [ref=e148]: L
+              - generic [ref=e149]: 66,300.43
+            - generic [ref=e150]: "|"
+            - generic [ref=e151]:
+              - generic [ref=e152]: Vol
+              - generic [ref=e153]: $145.62
+            - generic [ref=e154]: "|"
+            - generic [ref=e155]:
+              - generic [ref=e156]: MCap
+              - generic [ref=e157]: $1.33T
+            - generic [ref=e158]:
+              - generic [ref=e159]: 24h Vol
+              - generic [ref=e160]: $36.00B
+          - table [ref=e164]:
+            - row [ref=e165]:
+              - cell
+              - cell [ref=e166]:
+                - link "Charting by TradingView" [ref=e170] [cursor=pointer]:
+                  - /url: https://www.tradingview.com/?utm_medium=lwc-link&utm_campaign=lwc-chart&utm_source=localhost/
+                  - img [ref=e171]
+              - cell [ref=e175]
+            - row [ref=e179]:
+              - cell
+              - cell [ref=e180]
+              - cell [ref=e184]
+      - generic [ref=e189]:
+        - generic [ref=e191]:
+          - generic [ref=e192]: BTC-USD
+          - button "Run ▶" [ref=e193] [cursor=pointer]
+        - code [ref=e197]:
+          - generic [ref=e198]:
+            - textbox "Editor content" [ref=e199]
+            - textbox [ref=e200]
+            - generic [ref=e202]:
+              - generic [ref=e205]: "1"
+              - generic [ref=e207]: "2"
+              - generic [ref=e209]: "3"
+              - generic [ref=e211]: "4"
+              - generic [ref=e213]: "5"
+              - generic [ref=e215]: "6"
+              - generic [ref=e217]: "7"
+              - generic [ref=e219]: "8"
+              - generic [ref=e221]: "9"
+            - generic [ref=e232]:
+              - generic [ref=e234]: "# _____ _ _ _ __ __ ___ _"
+              - generic [ref=e236]: "# |_ _| |__ __ _| |_( )___ | \\/ |_ _ / _ \\ _ _ __ _ _ __ | |_"
+              - generic [ref=e238]: "# | | | '_ \\ / _` | __|// __| | |\\/| | | | | | | | | | | |/ _` | '_ \\| __|"
+              - generic [ref=e240]: "# | | | | | | (_| | |_ \\__ \\ | | | | |_| | | |_| | |_| | (_| | | | | |_"
+              - generic [ref=e242]: "# |_| |_| |_|\\__,_|\\__| |___/ |_| |_|\\__, | \\__\\_\\\\__,_|\\__,_|_| |_|\\__|"
+              - generic [ref=e244]: "# |___/"
+              - generic [ref=e246]: "#"
+              - generic [ref=e248]: "# Custom scripting coming soon..."
+              - generic [ref=e250]: "# Request a feature: type /request <your idea> and hit Run"
+      - generic [ref=e253]:
+        - generic [ref=e254]:
+          - paragraph [ref=e255]: Examples
+          - generic [ref=e256]:
+            - button "Backtest Run strategy test" [active] [ref=e257] [cursor=pointer]:
+              - generic [ref=e258]:
+                - paragraph [ref=e259]: Backtest
+                - paragraph [ref=e260]: Run strategy test
+            - button "Stats View metrics" [ref=e261] [cursor=pointer]:
+              - generic [ref=e262]:
+                - paragraph [ref=e263]: Stats
+                - paragraph [ref=e264]: View metrics
+            - button "Explain Learn strategy" [ref=e265] [cursor=pointer]:
+              - generic [ref=e266]:
+                - paragraph [ref=e267]: Explain
+                - paragraph [ref=e268]: Learn strategy
+            - button "Optimize Tune parameters" [ref=e269] [cursor=pointer]:
+              - generic [ref=e270]:
+                - paragraph [ref=e271]: Optimize
+                - paragraph [ref=e272]: Tune parameters
+        - generic [ref=e273]:
+          - generic [ref=e275]:
+            - paragraph [ref=e277]: Welcome to thats_my_quant! I can help you backtest trading strategies, analyze performance, and explain strategy mechanics. Try a quick action or ask me anything.
+            - generic [ref=e278]: 04:39 PM
+          - generic [ref=e280]:
+            - paragraph [ref=e281]: Run a momentum backtest on BTC/USDT with default parameters
+            - generic [ref=e282]: 04:39 PM
+          - generic [ref=e284]:
+            - paragraph [ref=e286]: Please select a provider or set your API key in the settings panel above to start chatting.
+            - generic [ref=e287]: 04:39 PM
+        - generic [ref=e288]:
+          - generic [ref=e289]:
+            - textbox "Chat message input" [ref=e290]:
+              - /placeholder: Ask about your strategy...
+            - button "Send message" [disabled] [ref=e291]:
+              - img [ref=e292]
+          - generic [ref=e294]:
+            - button "Ask" [ref=e295] [cursor=pointer]
+            - generic [ref=e296]: /
+            - button "Auto" [ref=e297] [cursor=pointer]
+      - generic [ref=e298]:
+        - generic [ref=e301]: Chart
+        - generic [ref=e304]: Code
+        - generic [ref=e307]: Chat
+  - generic [ref=e308]:
+    - alert
+    - alert
+```

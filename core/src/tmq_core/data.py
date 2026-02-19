@@ -132,3 +132,119 @@ def fetch_ohlcv(
     """One-liner that auto-detects provider and fetches data"""
     provider = get_provider(symbol, preferred_equity_provider=equity_provider)
     return provider.fetch_ohlcv(symbol, interval, start, end)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Universe Functions (for market-wide scans)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_tradeable_universe(
+    asset_class: str = "us_equity",
+    status: str = "active",
+    exchange: str | None = None,
+) -> list[dict]:
+    """
+    Get list of all tradeable assets from Alpaca.
+
+    This is an O(1) operation that returns the full universe of ~11,000
+    tradeable US stocks in a single API call.
+
+    Args:
+        asset_class: Asset class to filter ("us_equity" or "crypto")
+        status: Filter by status ("active", "inactive", or None for all)
+        exchange: Optional exchange filter (e.g., "NYSE", "NASDAQ")
+
+    Returns:
+        List of dicts with asset info:
+            - symbol: Ticker symbol
+            - name: Company name
+            - exchange: Trading exchange
+            - asset_class: "us_equity" or "crypto"
+            - tradable: Whether currently tradeable
+            - shortable: Whether can be shorted
+            - easy_to_borrow: Borrowing availability
+
+    Raises:
+        ValueError: If Alpaca is not configured (no API key)
+    """
+    import os
+
+    api_key = os.getenv("ALPACA_API_KEY")
+    api_secret = os.getenv("ALPACA_SECRET_KEY")
+
+    if not api_key or not api_secret:
+        raise ValueError(
+            "Alpaca not configured. Set ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables."
+        )
+
+    from alpaca.trading.client import TradingClient
+    from alpaca.trading.requests import GetAssetsRequest
+    from alpaca.trading.enums import AssetClass, AssetStatus
+
+    client = TradingClient(api_key=api_key, secret_key=api_secret)
+
+    # Build request
+    asset_class_enum = AssetClass.US_EQUITY if asset_class == "us_equity" else AssetClass.CRYPTO
+
+    request_params = GetAssetsRequest(asset_class=asset_class_enum)
+
+    assets = client.get_all_assets(request_params)
+
+    # Convert to list of dicts and apply filters
+    result = []
+    for asset in assets:
+        # Apply status filter
+        if status == "active" and asset.status != AssetStatus.ACTIVE:
+            continue
+        if status == "inactive" and asset.status != AssetStatus.INACTIVE:
+            continue
+
+        # Apply exchange filter
+        if exchange and asset.exchange.value != exchange:
+            continue
+
+        result.append({
+            "symbol": asset.symbol,
+            "name": asset.name,
+            "exchange": asset.exchange.value if asset.exchange else None,
+            "asset_class": asset.asset_class.value if asset.asset_class else None,
+            "tradable": asset.tradable,
+            "shortable": asset.shortable,
+            "easy_to_borrow": asset.easy_to_borrow,
+        })
+
+    return result
+
+
+def get_sector_stocks(sector: str) -> list[str]:
+    """
+    Get list of stock symbols in a sector.
+
+    Note: This uses yfinance sector data which is available per-ticker.
+    For efficient sector filtering, we'd need a fundamentals database.
+
+    This is a placeholder that returns common sector ETF components.
+
+    Args:
+        sector: Sector name (e.g., "technology", "healthcare", "financials")
+
+    Returns:
+        List of ticker symbols
+    """
+    # Common sector proxies via ETFs or well-known constituents
+    # In production, this would query a fundamentals API
+    SECTOR_PROXIES = {
+        "technology": ["AAPL", "MSFT", "GOOGL", "NVDA", "META", "AMZN", "CRM", "ADBE", "INTC", "AMD"],
+        "healthcare": ["JNJ", "UNH", "PFE", "ABBV", "MRK", "TMO", "LLY", "ABT", "BMY", "CVS"],
+        "financials": ["JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "BLK", "SCHW", "USB"],
+        "energy": ["XOM", "CVX", "COP", "SLB", "EOG", "MPC", "OXY", "PSX", "VLO", "PXD"],
+        "consumer": ["WMT", "PG", "KO", "PEP", "COST", "HD", "MCD", "NKE", "SBUX", "TGT"],
+        "industrials": ["BA", "CAT", "GE", "MMM", "HON", "UPS", "LMT", "RTX", "DE", "UNP"],
+    }
+
+    sector_lower = sector.lower()
+    for key, stocks in SECTOR_PROXIES.items():
+        if key in sector_lower or sector_lower in key:
+            return stocks
+
+    return []

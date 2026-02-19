@@ -1,77 +1,16 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useBacktest, useChatSettings, useCodePanel, useChartLayout, useInterval } from '../../context';
-import { useChat } from '../../hooks';
+import { useState, useRef, useEffect } from 'react';
+import { useChatWithUIActions } from '../../hooks';
 import { ChatMessage, ChatInput, QuickActions, TypingIndicator } from '../chat';
-import { ChatContext } from '../../api/client';
-
-// Default models for each provider (must match litellm model names)
-const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
-  anthropic: 'claude-haiku-4-5-20251001',
-  openai: 'gpt-4o-mini',
-  google: 'gemini-2.0-flash',
-  xai: 'grok-2',
-  openrouter: 'anthropic/claude-haiku-4.5',
-};
 
 export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
-  const { setBacktestResult } = useBacktest();
-  const {
-    apiKey, model,
-    useOpenRouter, openRouterApiKey, openRouterModel,
-    selectedServerProvider
-  } = useChatSettings();
-
-  // Get active pane context for state-aware AI
-  const { panes, activePaneId } = useChartLayout();
-  const { interval } = useInterval();
-  const activePane = panes.find(p => p.id === activePaneId);
-
-  // Build chat context from active pane state
-  const chatContext: ChatContext = useMemo(() => ({
-    symbol: activePane?.symbol,
-    interval: interval,
-    widgetType: activePane?.widgetType,
-  }), [activePane?.symbol, activePane?.widgetType, interval]);
-
-  // Compute effective API key and model based on provider selection
-  // If server provider is selected, use the provider's default model
-  const effectiveApiKey = useOpenRouter ? openRouterApiKey : apiKey;
-  const effectiveUseOpenRouter = selectedServerProvider === 'openrouter' || useOpenRouter;
-
-  // CRITICAL: Use provider-appropriate model, not the stored model which may be for a different provider
-  const effectiveModel = effectiveUseOpenRouter
-    ? openRouterModel
-    : (selectedServerProvider
-        ? PROVIDER_DEFAULT_MODELS[selectedServerProvider] || model
-        : model);
-
-  const { setCodePanelOpen, setSandboxCode } = useCodePanel();
+  const { messages, isTyping, sendMessage, stopGeneration } = useChatWithUIActions();
   const [isOpen, setIsOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const handleCustomCode = useCallback((code: string) => {
-    setSandboxCode(code);
-    setCodePanelOpen(true);
-  }, [setSandboxCode, setCodePanelOpen]);
-
-  const { messages, isTyping, sendMessage } = useChat({
-    apiKey: effectiveApiKey,
-    model: effectiveModel,
-    useOpenRouter: effectiveUseOpenRouter,
-    serverProvider: selectedServerProvider,
-    onBacktestResult: setBacktestResult,
-    onCustomCode: handleCustomCode,
-    context: chatContext,
-  });
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
-
-  const handleAction = (message: string) => {
-    sendMessage(message);
-  };
 
   return (
     <>
@@ -111,7 +50,7 @@ export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
           <h2 className="font-semibold text-[var(--text-primary)]">Chat</h2>
         </div>
 
-        <QuickActions onAction={handleAction} disabled={isTyping} />
+        <QuickActions onAction={sendMessage} disabled={isTyping} />
 
         <div className="flex-1 overflow-y-auto p-3">
           {messages.map((msg) => (
@@ -121,7 +60,7 @@ export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
           <div ref={messagesEndRef} />
         </div>
 
-        <ChatInput onSend={sendMessage} disabled={isTyping} />
+        <ChatInput onSend={sendMessage} onStop={stopGeneration} isTyping={isTyping} />
       </div>
 
       {/* Mobile backdrop */}

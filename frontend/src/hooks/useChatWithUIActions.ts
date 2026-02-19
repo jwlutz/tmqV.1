@@ -1,0 +1,162 @@
+import { useCallback, useMemo } from 'react';
+import { useBacktest, useChatSettings, useCodePanel, useChartLayout, useInterval } from '../context';
+import { useActionConfirmation } from '../context/ActionConfirmationContext';
+import { useChat } from './useChat';
+import { ChatContext, UIAction } from '../api/client';
+import type { WidgetType } from '../widgets/types';
+import type { ChartLayout } from '../context';
+
+// Default models for each provider (must match litellm model names)
+const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
+  anthropic: 'claude-haiku-4-5-20251001',
+  openai: 'gpt-4o-mini',
+  google: 'gemini-2.0-flash',
+  xai: 'grok-2',
+  openrouter: 'anthropic/claude-haiku-4.5',
+};
+
+/**
+ * Shared hook that combines useChat with UI action handling and workspace context.
+ * Used by both ChatSidebar and ChatPaneContent to avoid code duplication.
+ */
+export function useChatWithUIActions() {
+  const { setBacktestResult } = useBacktest();
+  const {
+    apiKey, model,
+    useOpenRouter, openRouterApiKey, openRouterModel,
+    selectedServerProvider
+  } = useChatSettings();
+  const { requestConfirmation } = useActionConfirmation();
+
+  // Get chart layout and workspace state for AI context
+  const { panes, activePaneId, layout, setLayout, applyLayoutPreset } = useChartLayout();
+  const { interval } = useInterval();
+  const { codePanelOpen, setCodePanelOpen, setSandboxCode } = useCodePanel();
+  const activePane = panes.find(p => p.id === activePaneId);
+
+  // Build expanded chat context with full workspace state
+  const chatContext: ChatContext = useMemo(() => ({
+    activePane: activePane ? {
+      id: activePane.id,
+      symbol: activePane.symbol,
+      widgetType: activePane.widgetType,
+      interval: interval,
+    } : undefined,
+    chartPanes: panes.map(p => ({
+      id: p.id,
+      symbol: p.symbol,
+      widgetType: p.widgetType,
+    })),
+    workspace: {
+      layout: layout,
+      codePanelOpen: codePanelOpen,
+    },
+  }), [activePane, panes, layout, codePanelOpen, interval]);
+
+  // Compute effective API key and model based on provider selection
+  const effectiveApiKey = useOpenRouter ? openRouterApiKey : apiKey;
+  const effectiveUseOpenRouter = selectedServerProvider === 'openrouter' || useOpenRouter;
+  const effectiveModel = effectiveUseOpenRouter
+    ? openRouterModel
+    : (selectedServerProvider
+        ? PROVIDER_DEFAULT_MODELS[selectedServerProvider] || model
+        : model);
+
+  const handleCustomCode = useCallback((code: string) => {
+    setSandboxCode(code);
+    setCodePanelOpen(true);
+  }, [setSandboxCode, setCodePanelOpen]);
+
+  // Handle UI actions from AI (widget changes, layout changes, etc.)
+  const handleUIAction = useCallback((action: UIAction) => {
+    // Helper to get active chart tab ID (FlexLayout tab, not AppContext pane)
+    const getActiveChartTabId = () => window.__activeChartTabId;
+
+    switch (action._action) {
+      case 'set_widget':
+        if (action.widget_type) {
+          // Use FlexLayout chart tab registry
+          const targetTabId = action.pane_id || getActiveChartTabId();
+          const setWidgetFn = targetTabId && window.__chartSetWidgetType?.get(targetTabId);
+          if (setWidgetFn) {
+            setWidgetFn(action.widget_type as WidgetType);
+          } else {
+            // Fallback: try first available chart tab
+            const firstEntry = window.__chartSetWidgetType?.entries().next().value;
+            if (firstEntry) firstEntry[1](action.widget_type as WidgetType);
+          }
+        }
+        break;
+      case 'set_layout':
+        if (action.preset) {
+          applyLayoutPreset(action.preset);
+        } else if (action.layout) {
+          setLayout(action.layout as ChartLayout);
+        }
+        break;
+      case 'set_symbol':
+        if (action.symbol) {
+          // Use FlexLayout chart tab registry
+          const targetTabId = action.pane_id || getActiveChartTabId();
+          const setSymbolFn = targetTabId && window.__chartSetSymbol?.get(targetTabId);
+          if (setSymbolFn) {
+            setSymbolFn(action.symbol);
+          } else {
+            // Fallback: try first available chart tab
+            const firstEntry = window.__chartSetSymbol?.entries().next().value;
+            if (firstEntry) firstEntry[1](action.symbol);
+          }
+        }
+        break;
+      case 'toggle_code_panel':
+        if (action.open !== undefined) {
+          setCodePanelOpen(action.open);
+        } else {
+          setCodePanelOpen(!codePanelOpen);
+        }
+        break;
+      case 'open_tab':
+        if (action.tab_type) {
+          // Use the exposed flexlayout addTab function
+          const addTab = (window as unknown as { __flexLayoutAddTab?: (type: string) => void }).__flexLayoutAddTab;
+          if (addTab) {
+            addTab(action.tab_type);
+          }
+        }
+        break;
+      case 'apply_indicator':
+        if (action.indicator) {
+          // Use FlexLayout chart tab registry
+          const targetTabId = action.pane_id || getActiveChartTabId();
+          // Special case: volume toggle
+          if (action.indicator === 'volume') {
+            const toggleVolume = targetTabId && window.__chartVolumeToggle?.get(targetTabId);
+            if (toggleVolume) {
+              toggleVolume();
+            }
+          } else {
+            // Regular indicator toggle
+            const toggleIndicator = targetTabId && window.__chartIndicatorToggle?.get(targetTabId);
+            if (toggleIndicator) {
+              toggleIndicator(action.indicator);
+            }
+          }
+        }
+        break;
+    }
+  }, [codePanelOpen, setLayout, applyLayoutPreset, setCodePanelOpen]);
+
+  const chatResult = useChat({
+    apiKey: effectiveApiKey,
+    model: effectiveModel,
+    useOpenRouter: effectiveUseOpenRouter,
+    serverProvider: selectedServerProvider,
+    onBacktestResult: setBacktestResult,
+    onCustomCode: handleCustomCode,
+    onUIAction: handleUIAction,
+    context: chatContext,
+    requestConfirmation,
+  });
+
+  return chatResult;
+}

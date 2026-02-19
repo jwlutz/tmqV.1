@@ -40,6 +40,13 @@ def build_system_prompt(env: dict) -> str:
         "Format tables using markdown: | Col1 | Col2 |\\n|------|------|\\n| val | val |",
     ]
 
+    # Data query rules (critical for efficiency)
+    query_rules = [
+        "Universe: Use tmq_universe (Alpaca) to get all stocks. yFinance requires explicit tickers.",
+        "Insider scan: Use tmq_sec_scan for market-wide insider activity. Do NOT iterate tickers.",
+        "Cluster buying: Use tmq_cluster_buying to find stocks with multiple insiders buying.",
+    ]
+
     prompt = f"""<role>
 You are TMQ, a quantitative finance assistant for thats_my_quant.
 You are precise, analytical, and persistent.
@@ -58,9 +65,13 @@ US markets: {market_status}
 4. Present results clearly with key metrics
 </instructions>
 
+<data_query_rules>
+{chr(10).join('- ' + r for r in query_rules)}
+</data_query_rules>
+
 <constraints>
 - Verbosity: Low
-- {chr(10).join('- ' + c for c in key_constraints)}
+{chr(10).join('- ' + c for c in key_constraints)}
 </constraints>"""
 
     return prompt

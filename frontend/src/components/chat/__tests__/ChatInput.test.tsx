@@ -1,9 +1,16 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ChatInput } from '../ChatInput';
+import { ActionConfirmationProvider } from '../../../context/ActionConfirmationContext';
+
+const renderWithProvider = (ui: React.ReactElement) => {
+  return render(
+    <ActionConfirmationProvider>{ui}</ActionConfirmationProvider>
+  );
+};
 
 test('calls onSend when pressing Enter', () => {
   const onSend = vi.fn();
-  render(<ChatInput onSend={onSend} />);
+  renderWithProvider(<ChatInput onSend={onSend} />);
 
   const input = screen.getByPlaceholderText(/ask about/i);
   fireEvent.change(input, { target: { value: 'hello' } });
@@ -14,7 +21,7 @@ test('calls onSend when pressing Enter', () => {
 
 test('does not send empty messages', () => {
   const onSend = vi.fn();
-  render(<ChatInput onSend={onSend} />);
+  renderWithProvider(<ChatInput onSend={onSend} />);
 
   const input = screen.getByPlaceholderText(/ask about/i);
   fireEvent.keyDown(input, { key: 'Enter' });
@@ -24,7 +31,7 @@ test('does not send empty messages', () => {
 
 test('clears input after sending', () => {
   const onSend = vi.fn();
-  render(<ChatInput onSend={onSend} />);
+  renderWithProvider(<ChatInput onSend={onSend} />);
 
   const input = screen.getByPlaceholderText(/ask about/i) as HTMLTextAreaElement;
   fireEvent.change(input, { target: { value: 'test message' } });
@@ -35,7 +42,7 @@ test('clears input after sending', () => {
 
 test('does not send on Shift+Enter', () => {
   const onSend = vi.fn();
-  render(<ChatInput onSend={onSend} />);
+  renderWithProvider(<ChatInput onSend={onSend} />);
 
   const input = screen.getByPlaceholderText(/ask about/i);
   fireEvent.change(input, { target: { value: 'hello' } });
@@ -46,19 +53,19 @@ test('does not send on Shift+Enter', () => {
 
 test('send button is disabled when input is empty', () => {
   const onSend = vi.fn();
-  render(<ChatInput onSend={onSend} />);
+  renderWithProvider(<ChatInput onSend={onSend} />);
 
-  const button = screen.getByRole('button');
+  const button = screen.getByLabelText('Send message');
   expect(button).toBeDisabled();
 });
 
 test('send button is disabled when disabled prop is true', () => {
   const onSend = vi.fn();
-  render(<ChatInput onSend={onSend} disabled />);
+  renderWithProvider(<ChatInput onSend={onSend} disabled />);
 
   const input = screen.getByPlaceholderText(/ask about/i);
   fireEvent.change(input, { target: { value: 'hello' } });
 
-  const button = screen.getByRole('button');
+  const button = screen.getByLabelText('Send message');
   expect(button).toBeDisabled();
 });

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useSettingsOverlay } from '../../context'
 
-type PaneType = 'chart' | 'chat' | 'code' | 'backtest' | 'rot'
+type PaneType = 'chart' | 'chat' | 'code' | 'backtest' | 'rot' | 'sec'
 
 const PANE_OPTIONS: { type: PaneType; label: string; icon: string }[] = [
   { type: 'chart', label: 'Chart', icon: '\u{1F4C8}' },
@@ -9,6 +9,7 @@ const PANE_OPTIONS: { type: PaneType; label: string; icon: string }[] = [
   { type: 'code', label: 'Code', icon: '\u{1F4BB}' },
   { type: 'backtest', label: 'Backtest', icon: '\u{1F4CA}' },
   { type: 'rot', label: 'Rot', icon: '\u{1F9E0}' },
+  { type: 'sec', label: 'SEC', icon: '\u{1F4C4}' },
 ]
 
 export function TopBar() {

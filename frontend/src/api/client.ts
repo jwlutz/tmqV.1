@@ -255,6 +255,101 @@ export async function searchMacroSeries(query: string): Promise<Array<{ id: stri
   return res.json();
 }
 
+// SEC Filings types
+export interface SECFiling {
+  accession_number: string;
+  form_type: string;
+  filing_date: string;
+  description: string;
+  ticker: string;
+  sec_url: string;
+}
+
+export interface SECInsiderTransaction {
+  security: string;
+  date: string;
+  code: string;
+  code_meaning: string;
+  shares: number;
+  price: number | null;
+  acquired: boolean;
+  shares_after: number;
+  direct: boolean;
+  ownership_nature: string | null;
+}
+
+export interface SECForm4 {
+  accession_number: string;
+  filing_date: string;
+  issuer: {
+    cik: string;
+    name: string;
+    ticker: string;
+  };
+  reporter: {
+    cik: string;
+    name: string;
+    is_director: boolean;
+    is_officer: boolean;
+    is_ten_percent_owner: boolean;
+    officer_title: string | null;
+  };
+  transactions: SECInsiderTransaction[];
+}
+
+export async function fetchSECFilings(
+  ticker: string,
+  formTypes?: string[],
+  limit: number = 50,
+  startDate?: string,
+  endDate?: string
+): Promise<{ ticker: string; count: number; filings: SECFiling[] }> {
+  const params = new URLSearchParams({ ticker, limit: String(limit) });
+  if (formTypes?.length) params.set('form_types', formTypes.join(','));
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+
+  const res = await fetch(`${BASE_URL}/api/sec/filings?${params}`);
+  if (!res.ok) throw new Error(`SEC filings fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchSECFilingDetail(
+  ticker: string,
+  accessionNumber: string
+): Promise<{
+  filing: SECFiling;
+  form_type: string;
+  parsed?: SECForm4;
+  content_preview?: string;
+}> {
+  const params = new URLSearchParams({ ticker });
+  const res = await fetch(`${BASE_URL}/api/sec/filing/${accessionNumber}?${params}`);
+  if (!res.ok) throw new Error(`SEC filing detail fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchSECInsiderTransactions(
+  ticker: string,
+  limit: number = 20,
+  startDate?: string,
+  endDate?: string
+): Promise<{ ticker: string; count: number; transactions: SECForm4[] }> {
+  const params = new URLSearchParams({ ticker, limit: String(limit) });
+  if (startDate) params.set('start_date', startDate);
+  if (endDate) params.set('end_date', endDate);
+
+  const res = await fetch(`${BASE_URL}/api/sec/insider-transactions?${params}`);
+  if (!res.ok) throw new Error(`SEC insider transactions fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchSECFormTypes(): Promise<string[]> {
+  const res = await fetch(`${BASE_URL}/api/sec/form-types`);
+  if (!res.ok) throw new Error(`SEC form types fetch failed: ${res.statusText}`);
+  return res.json();
+}
+
 // Server config types
 export interface ServerConfig {
   providers: Record<string, boolean>;
@@ -278,10 +373,42 @@ export interface ChatSSEEvent {
   result?: string;
 }
 
+// Chart pane info for AI context
+export interface ChartPaneInfo {
+  id: string;
+  symbol: string;
+  widgetType: string;
+}
+
+// Full workspace context for AI awareness
 export interface ChatContext {
+  // Active pane (default target for actions)
+  activePane?: {
+    id: string;
+    symbol: string;
+    widgetType: string;
+    interval: string;
+  };
+  // All chart panes so AI knows what's available
+  chartPanes?: ChartPaneInfo[];
+  // Workspace visibility state
+  workspace?: {
+    layout: '1x1' | '1x2' | '2x2';
+    codePanelOpen: boolean;
+  };
+}
+
+// UI action returned from AI tools
+export interface UIAction {
+  _action: 'set_widget' | 'set_layout' | 'set_symbol' | 'toggle_code_panel' | 'open_tab' | 'apply_indicator';
+  pane_id?: string;
+  widget_type?: string;
+  layout?: string;
+  preset?: string;
   symbol?: string;
-  interval?: string;
-  widgetType?: string;
+  open?: boolean;
+  tab_type?: 'chart' | 'chat' | 'code' | 'backtest' | 'rot' | 'sec';
+  indicator?: string;
 }
 
 export interface ChatOptions {
@@ -299,7 +426,8 @@ export async function* streamChat(
   model: string = "gpt-4o-mini",
   useOpenRouter: boolean = false,
   isServerProvider: boolean = false,
-  context?: ChatContext
+  context?: ChatContext,
+  signal?: AbortSignal
 ): AsyncGenerator<ChatSSEEvent> {
   const body: Record<string, unknown> = {
     messages,
@@ -315,12 +443,24 @@ export async function* streamChat(
     body.api_key = apiKeyOrProvider;
   }
 
-  // Add chart context if available
+  // Add workspace context if available
   if (context) {
     body.context = {
-      symbol: context.symbol,
-      interval: context.interval,
-      widget_type: context.widgetType,
+      active_pane: context.activePane ? {
+        id: context.activePane.id,
+        symbol: context.activePane.symbol,
+        widget_type: context.activePane.widgetType,
+        interval: context.activePane.interval,
+      } : undefined,
+      chart_panes: context.chartPanes?.map(p => ({
+        id: p.id,
+        symbol: p.symbol,
+        widget_type: p.widgetType,
+      })),
+      workspace: context.workspace ? {
+        layout: context.workspace.layout,
+        code_panel_open: context.workspace.codePanelOpen,
+      } : undefined,
     };
   }
 
@@ -328,6 +468,7 @@ export async function* streamChat(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok) {

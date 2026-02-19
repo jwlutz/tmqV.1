@@ -122,6 +122,166 @@ def execute_tool(name: str, args: dict) -> str:
                 default=str,
             )
 
+        # === SEC Filings Tools ===
+        elif name == "tmq_sec_filings":
+            from tmq_core.sec import fetch_filings, filing_to_dict
+
+            filings = fetch_filings(
+                ticker=args["symbol"],
+                form_types=args.get("form_types"),
+                limit=args.get("limit", 20),
+            )
+            return json.dumps({
+                "symbol": args["symbol"],
+                "count": len(filings),
+                "filings": [filing_to_dict(f) for f in filings],
+            })
+
+        elif name == "tmq_sec_insider":
+            from tmq_core.sec import fetch_insider_transactions, form4_to_dict
+
+            form4s = fetch_insider_transactions(
+                ticker=args["symbol"],
+                limit=args.get("limit", 20),
+            )
+            # Summarize transactions for AI
+            transactions = []
+            for f in form4s:
+                f_dict = form4_to_dict(f)
+                net_shares = sum(
+                    t["shares"] if t["acquired"] else -t["shares"]
+                    for t in f_dict["transactions"]
+                )
+                transactions.append({
+                    "date": f_dict["filing_date"],
+                    "reporter": f_dict["reporter"]["name"],
+                    "title": f_dict["reporter"].get("officer_title")
+                            or ("Director" if f_dict["reporter"]["is_director"] else "Insider"),
+                    "net_shares": net_shares,
+                    "is_buy": net_shares > 0,
+                    "transactions": f_dict["transactions"],
+                })
+            return json.dumps({
+                "symbol": args["symbol"],
+                "count": len(transactions),
+                "insider_activity": transactions,
+            })
+
+        elif name == "tmq_sec_read":
+            from tmq_core.sec import fetch_filings, fetch_form4, fetch_filing_content, filing_to_dict, form4_to_dict
+
+            filings = fetch_filings(ticker=args["symbol"], limit=200)
+            filing = next(
+                (f for f in filings if f.accession_number == args["accession_number"]),
+                None,
+            )
+            if not filing:
+                return json.dumps({"error": f"Filing not found: {args['accession_number']}"})
+
+            if filing.form_type == "4":
+                form4 = fetch_form4(filing)
+                return json.dumps({
+                    "filing": filing_to_dict(filing),
+                    "parsed": form4_to_dict(form4),
+                })
+            else:
+                content = fetch_filing_content(filing, max_chars=30000)
+                return json.dumps({
+                    "filing": filing_to_dict(filing),
+                    "content_excerpt": content[:15000] if len(content) > 15000 else content,
+                    "truncated": len(content) > 15000,
+                })
+
+        elif name == "tmq_sec_scan":
+            from tmq_core.sec import scan_recent_form4s
+
+            results = scan_recent_form4s(
+                days_back=args.get("days_back", 7),
+                transaction_filter=args.get("transaction_filter", "purchase"),
+                min_insiders=args.get("min_insiders", 1),
+            )
+            return json.dumps(results, default=str)
+
+        elif name == "tmq_cluster_buying":
+            from tmq_core.sec import find_cluster_buying
+
+            results = find_cluster_buying(
+                days_back=args.get("days_back", 7),
+                min_insiders=args.get("min_insiders", 3),
+            )
+            return json.dumps(results, default=str)
+
+        # === Universe Tools ===
+        elif name == "tmq_universe":
+            from tmq_core.data import get_tradeable_universe
+
+            try:
+                assets = get_tradeable_universe(
+                    exchange=args.get("exchange"),
+                )
+                # Filter for tradable only if requested
+                if args.get("tradable_only", True):
+                    assets = [a for a in assets if a.get("tradable")]
+
+                return json.dumps({
+                    "count": len(assets),
+                    "symbols": [a["symbol"] for a in assets],
+                    "assets": assets[:100],  # Return first 100 with full details
+                    "note": f"Showing 100 of {len(assets)} assets. Full symbol list included."
+                })
+            except ValueError as e:
+                return json.dumps({"error": str(e), "hint": "Alpaca API key required for universe data."})
+
+        elif name == "tmq_capabilities":
+            from .prompts.context import build_capabilities_matrix, get_active_providers
+
+            return json.dumps({
+                "matrix": build_capabilities_matrix(),
+                "active_providers": list(get_active_providers().keys()),
+            })
+
+        # === UI Control Tools ===
+        # These return _action payloads that the frontend executes
+        elif name == "tmq_set_widget":
+            return json.dumps({
+                "_action": "set_widget",
+                "pane_id": args.get("pane_id"),  # None means active pane
+                "widget_type": args["widget_type"],
+            })
+
+        elif name == "tmq_set_layout":
+            return json.dumps({
+                "_action": "set_layout",
+                "layout": args.get("layout"),
+                "preset": args.get("preset"),
+            })
+
+        elif name == "tmq_set_symbol":
+            return json.dumps({
+                "_action": "set_symbol",
+                "pane_id": args.get("pane_id"),  # None means active pane
+                "symbol": args["symbol"],
+            })
+
+        elif name == "tmq_toggle_code_panel":
+            return json.dumps({
+                "_action": "toggle_code_panel",
+                "open": args.get("open"),  # None means toggle
+            })
+
+        elif name == "tmq_open_tab":
+            return json.dumps({
+                "_action": "open_tab",
+                "tab_type": args["tab_type"],
+            })
+
+        elif name == "tmq_apply_indicator":
+            return json.dumps({
+                "_action": "apply_indicator",
+                "pane_id": args.get("pane_id"),  # None means active pane
+                "indicator": args["indicator"],
+            })
+
         return json.dumps({"error": f"Unknown tool: {name}"})
 
     except Exception as e:
@@ -166,24 +326,48 @@ async def chat_stream(
     provider = get_provider_from_model(model)
     system_prompt = build_prompt(provider, env)
 
-    # Add chart context if available
+    # Add workspace context if available
     if context:
-        context_parts = []
-        if context.get("symbol"):
-            context_parts.append(f"symbol: {context['symbol']}")
-        if context.get("interval"):
-            context_parts.append(f"timeframe: {context['interval']}")
-        if context.get("widget_type"):
-            context_parts.append(f"chart type: {context['widget_type']}")
+        active_pane = context.get("active_pane")
+        chart_panes = context.get("chart_panes", [])
+        workspace = context.get("workspace", {})
 
-        if context_parts:
-            context_str = ", ".join(context_parts)
+        context_lines = []
+
+        # Active pane info
+        if active_pane:
+            context_lines.append(
+                f"Active/focused pane: {active_pane.get('id')} showing "
+                f"{active_pane.get('symbol', 'BTC-USD')} ({active_pane.get('widget_type', 'candlestick')}) "
+                f"on {active_pane.get('interval', '1d')} timeframe"
+            )
+
+        # All chart panes
+        if chart_panes and len(chart_panes) > 1:
+            pane_list = ", ".join(
+                f"{p.get('id')}:{p.get('symbol')}({p.get('widget_type')})"
+                for p in chart_panes
+            )
+            context_lines.append(f"All chart panes: {pane_list}")
+
+        # Workspace state
+        if workspace:
+            layout = workspace.get("layout", "1x1")
+            code_open = workspace.get("code_panel_open", False)
+            context_lines.append(
+                f"Layout: {layout}, Code panel: {'open' if code_open else 'closed'}"
+            )
+
+        if context_lines:
+            default_symbol = active_pane.get("symbol", "BTC-USD") if active_pane else "BTC-USD"
             system_prompt += (
-                f"\n\n<current_chart>\n"
-                f"User is viewing: {context_str}\n"
-                f"When the user asks about indicators, prices, or backtests without specifying a symbol, "
-                f"use {context.get('symbol', 'BTC-USD')} as the default.\n"
-                f"</current_chart>"
+                f"\n\n<workspace_state>\n"
+                + "\n".join(context_lines) +
+                f"\n\nWhen the user asks about prices, indicators, or backtests without specifying a symbol, "
+                f"use {default_symbol} as the default.\n"
+                f"When changing widgets or symbols without specifying a pane, target the active pane.\n"
+                f"If multiple chart panes exist and the request is ambiguous, ask the user which pane to modify.\n"
+                f"</workspace_state>"
             )
 
     full_messages = [{"role": "system", "content": system_prompt}] + messages
