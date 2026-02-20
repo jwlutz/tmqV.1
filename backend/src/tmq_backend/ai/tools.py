@@ -47,7 +47,16 @@ TOOLS = [
                     "symbol": {"type": "string"},
                     "indicator": {
                         "type": "string",
-                        "description": "Indicator name: rsi, sma, ema, macd, bbands, stoch, atr, adx, obv, vwap",
+                        "description": (
+                            "Indicator name. Moving Averages: sma, ema, wma, dema, tema, hma, alma, vwma, lsma, smma. "
+                            "Volatility: atr, adr, stdev, bbw, hv. "
+                            "Channels: bbands, kc (Keltner), dc (Donchian), envelope. "
+                            "Momentum: macd, mom, roc, ppo, trix, bop, coppock. "
+                            "Oscillators: rsi, cci, stoch, stochrsi, willr, ao, cmo, dpo, tsi, uo. "
+                            "Trend: adx, aroon, ichimoku, sar (Parabolic), supertrend, dmi, chop, zigzag. "
+                            "Volume: obv, mfi, cmf, pvt, vo, eom, klinger, chaikin. "
+                            "Use 'volume' to toggle volume bars."
+                        ),
                     },
                     "interval": {"type": "string", "default": "1d"},
                     "start": {"type": "string"},
@@ -331,31 +340,6 @@ TOOLS = [
             },
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "tmq_cluster_buying",
-            "description": (
-                "Find stocks with CLUSTER insider buying — multiple different insiders buying the same stock. "
-                "This is a strong bullish signal. Returns stocks ranked by number of unique insider buyers."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "days_back": {
-                        "type": "integer",
-                        "default": 7,
-                        "description": "How many days to look back",
-                    },
-                    "min_insiders": {
-                        "type": "integer",
-                        "default": 3,
-                        "description": "Minimum unique insiders buying (3+ is strong signal)",
-                    },
-                },
-            },
-        },
-    },
     # === Universe Tools ===
     {
         "type": "function",
@@ -518,6 +502,55 @@ TOOLS = [
                     },
                 },
                 "required": ["tab_type"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "tmq_set_interval",
+            "description": (
+                "Change the chart timeframe/interval. This VISUALLY changes the candle period displayed. "
+                "If pane_id is omitted, changes the active/focused chart pane."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "interval": {
+                        "type": "string",
+                        "enum": ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1wk", "1mo"],
+                        "description": "Candle interval/timeframe",
+                    },
+                    "pane_id": {
+                        "type": "string",
+                        "description": "Target pane ID. Omit to use the active/focused pane.",
+                    },
+                },
+                "required": ["interval"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "tmq_select_tab",
+            "description": (
+                "Switch to an existing workspace tab. Use tab_id for a specific tab, "
+                "or tab_type to select the first tab of that type (chart, chat, code, backtest, rot, sec)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tab_id": {
+                        "type": "string",
+                        "description": "Specific tab ID to select (e.g., 'tab-chart', 'tab-code')",
+                    },
+                    "tab_type": {
+                        "type": "string",
+                        "enum": ["chart", "chat", "code", "backtest", "rot", "sec"],
+                        "description": "Select first tab of this type",
+                    },
+                },
             },
         },
     },

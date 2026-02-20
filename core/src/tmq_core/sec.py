@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
 from typing import Literal
-from urllib.parse import urljoin
 
 import requests
 
@@ -58,6 +57,7 @@ def _rate_limited_get(url: str, headers: dict | None = None) -> requests.Respons
 # CIK Lookup
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @lru_cache(maxsize=1)
 def _load_cik_mapping() -> dict[str, str]:
     """Load the SEC's ticker-to-CIK mapping. Cached after first call."""
@@ -69,7 +69,9 @@ def _load_cik_mapping() -> dict[str, str]:
     mapping = {}
     for entry in data.values():
         ticker = entry["ticker"].upper()
-        cik = str(entry["cik_str"]).zfill(10)  # CIK must be 10 digits with leading zeros
+        cik = str(entry["cik_str"]).zfill(
+            10
+        )  # CIK must be 10 digits with leading zeros
         mapping[ticker] = cik
 
     return mapping
@@ -106,9 +108,11 @@ def get_company_info(ticker: str) -> dict | None:
 # Filings List
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class Filing:
     """Represents an SEC filing."""
+
     accession_number: str
     form_type: str
     filing_date: str
@@ -132,12 +136,26 @@ class Filing:
 
 # Popular form types for filtering
 POPULAR_FORM_TYPES = [
-    "10-K", "10-Q", "8-K", "4", "3", "5",
-    "10-K/A", "10-Q/A", "8-K/A",
-    "13F-HR", "13F-NT",
-    "SC 13G", "SC 13G/A", "SC 13D", "SC 13D/A",
-    "DEF 14A", "DEFA14A",
-    "S-1", "S-3", "S-8",
+    "10-K",
+    "10-Q",
+    "8-K",
+    "4",
+    "3",
+    "5",
+    "10-K/A",
+    "10-Q/A",
+    "8-K/A",
+    "13F-HR",
+    "13F-NT",
+    "SC 13G",
+    "SC 13G/A",
+    "SC 13D",
+    "SC 13D/A",
+    "DEF 14A",
+    "DEFA14A",
+    "S-1",
+    "S-3",
+    "S-8",
     "144",
 ]
 
@@ -216,9 +234,11 @@ def fetch_filings(
 # Form 4 Parser (Insider Transactions)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class InsiderTransaction:
     """A single transaction from Form 4."""
+
     security_title: str
     transaction_date: str
     transaction_code: str  # A=Award, M=Conversion, P=Purchase, S=Sale, etc.
@@ -233,6 +253,7 @@ class InsiderTransaction:
 @dataclass
 class Form4Filing:
     """Parsed Form 4 filing with structured data."""
+
     accession_number: str
     filing_date: str
 
@@ -302,7 +323,9 @@ def _get_text(element: ET.Element | None, path: str) -> str | None:
     return el.text.strip() if el is not None and el.text else None
 
 
-def parse_form4(xml_content: str, accession_number: str, filing_date: str) -> Form4Filing:
+def parse_form4(
+    xml_content: str, accession_number: str, filing_date: str
+) -> Form4Filing:
     """
     Parse Form 4 XML into structured data.
 
@@ -315,7 +338,7 @@ def parse_form4(xml_content: str, accession_number: str, filing_date: str) -> Fo
         Form4Filing with parsed transaction data
     """
     # Handle namespace - Form 4 XML uses a namespace
-    xml_content = re.sub(r'xmlns="[^"]+"', '', xml_content)
+    xml_content = re.sub(r'xmlns="[^"]+"', "", xml_content)
     root = ET.fromstring(xml_content)
 
     # Issuer info
@@ -332,9 +355,13 @@ def parse_form4(xml_content: str, accession_number: str, filing_date: str) -> Fo
 
     # Relationship
     relationship = reporter.find("reportingOwnerRelationship") if reporter else None
-    is_director = _get_text(relationship, "isDirector") == "1" if relationship else False
+    is_director = (
+        _get_text(relationship, "isDirector") == "1" if relationship else False
+    )
     is_officer = _get_text(relationship, "isOfficer") == "1" if relationship else False
-    is_ten_percent = _get_text(relationship, "isTenPercentOwner") == "1" if relationship else False
+    is_ten_percent = (
+        _get_text(relationship, "isTenPercentOwner") == "1" if relationship else False
+    )
     is_other = _get_text(relationship, "isOther") == "1" if relationship else False
     officer_title = _get_text(relationship, "officerTitle") if relationship else None
 
@@ -358,50 +385,74 @@ def parse_form4(xml_content: str, accession_number: str, filing_date: str) -> Fo
         security = _get_text(txn, ".//securityTitle/value")
         txn_date = _get_text(txn, ".//transactionDate/value")
         txn_code = _get_text(txn, ".//transactionCoding/transactionCode")
-        shares = _safe_float(_get_text(txn, ".//transactionAmounts/transactionShares/value"))
-        price = _safe_float(_get_text(txn, ".//transactionAmounts/transactionPricePerShare/value"))
-        acq_disp = _get_text(txn, ".//transactionAmounts/transactionAcquiredDisposedCode/value")
-        shares_after = _safe_float(_get_text(txn, ".//postTransactionAmounts/sharesOwnedFollowingTransaction/value"))
+        shares = _safe_float(
+            _get_text(txn, ".//transactionAmounts/transactionShares/value")
+        )
+        price = _safe_float(
+            _get_text(txn, ".//transactionAmounts/transactionPricePerShare/value")
+        )
+        acq_disp = _get_text(
+            txn, ".//transactionAmounts/transactionAcquiredDisposedCode/value"
+        )
+        shares_after = _safe_float(
+            _get_text(
+                txn, ".//postTransactionAmounts/sharesOwnedFollowingTransaction/value"
+            )
+        )
         ownership = _get_text(txn, ".//ownershipNature/directOrIndirectOwnership/value")
         nature = _get_text(txn, ".//ownershipNature/natureOfOwnership/value")
 
         if shares is not None:
-            filing.non_derivative_transactions.append(InsiderTransaction(
-                security_title=security or "Common Stock",
-                transaction_date=txn_date or filing_date,
-                transaction_code=txn_code or "?",
-                shares=shares,
-                price_per_share=price,
-                acquired_disposed=acq_disp if acq_disp in ("A", "D") else "A",
-                shares_owned_after=shares_after or 0,
-                direct_indirect=ownership if ownership in ("D", "I") else "D",
-                nature_of_ownership=nature,
-            ))
+            filing.non_derivative_transactions.append(
+                InsiderTransaction(
+                    security_title=security or "Common Stock",
+                    transaction_date=txn_date or filing_date,
+                    transaction_code=txn_code or "?",
+                    shares=shares,
+                    price_per_share=price,
+                    acquired_disposed=acq_disp if acq_disp in ("A", "D") else "A",
+                    shares_owned_after=shares_after or 0,
+                    direct_indirect=ownership if ownership in ("D", "I") else "D",
+                    nature_of_ownership=nature,
+                )
+            )
 
     # Derivative transactions (options, RSUs, etc.)
     for txn in root.findall(".//derivativeTransaction"):
         security = _get_text(txn, ".//securityTitle/value")
         txn_date = _get_text(txn, ".//transactionDate/value")
         txn_code = _get_text(txn, ".//transactionCoding/transactionCode")
-        shares = _safe_float(_get_text(txn, ".//transactionAmounts/transactionShares/value"))
-        price = _safe_float(_get_text(txn, ".//transactionAmounts/transactionPricePerShare/value"))
-        acq_disp = _get_text(txn, ".//transactionAmounts/transactionAcquiredDisposedCode/value")
-        shares_after = _safe_float(_get_text(txn, ".//postTransactionAmounts/sharesOwnedFollowingTransaction/value"))
+        shares = _safe_float(
+            _get_text(txn, ".//transactionAmounts/transactionShares/value")
+        )
+        price = _safe_float(
+            _get_text(txn, ".//transactionAmounts/transactionPricePerShare/value")
+        )
+        acq_disp = _get_text(
+            txn, ".//transactionAmounts/transactionAcquiredDisposedCode/value"
+        )
+        shares_after = _safe_float(
+            _get_text(
+                txn, ".//postTransactionAmounts/sharesOwnedFollowingTransaction/value"
+            )
+        )
         ownership = _get_text(txn, ".//ownershipNature/directOrIndirectOwnership/value")
         nature = _get_text(txn, ".//ownershipNature/natureOfOwnership/value")
 
         if shares is not None:
-            filing.derivative_transactions.append(InsiderTransaction(
-                security_title=security or "Derivative",
-                transaction_date=txn_date or filing_date,
-                transaction_code=txn_code or "?",
-                shares=shares,
-                price_per_share=price,
-                acquired_disposed=acq_disp if acq_disp in ("A", "D") else "A",
-                shares_owned_after=shares_after or 0,
-                direct_indirect=ownership if ownership in ("D", "I") else "D",
-                nature_of_ownership=nature,
-            ))
+            filing.derivative_transactions.append(
+                InsiderTransaction(
+                    security_title=security or "Derivative",
+                    transaction_date=txn_date or filing_date,
+                    transaction_code=txn_code or "?",
+                    shares=shares,
+                    price_per_share=price,
+                    acquired_disposed=acq_disp if acq_disp in ("A", "D") else "A",
+                    shares_owned_after=shares_after or 0,
+                    direct_indirect=ownership if ownership in ("D", "I") else "D",
+                    nature_of_ownership=nature,
+                )
+            )
 
     return filing
 
@@ -512,6 +563,7 @@ def fetch_insider_transactions(
 # Filing Content Fetching
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def fetch_filing_content(filing: Filing, max_chars: int = 100000) -> str:
     """
     Fetch the raw content of a filing.
@@ -529,22 +581,29 @@ def fetch_filing_content(filing: Filing, max_chars: int = 100000) -> str:
 
     # Basic HTML tag stripping for text extraction
     # Remove script and style elements
-    content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
-    content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL | re.IGNORECASE)
+    content = re.sub(
+        r"<script[^>]*>.*?</script>", "", content, flags=re.DOTALL | re.IGNORECASE
+    )
+    content = re.sub(
+        r"<style[^>]*>.*?</style>", "", content, flags=re.DOTALL | re.IGNORECASE
+    )
 
     # Remove HTML tags
-    content = re.sub(r'<[^>]+>', ' ', content)
+    content = re.sub(r"<[^>]+>", " ", content)
 
     # Clean up whitespace
-    content = re.sub(r'\s+', ' ', content)
-    content = re.sub(r'\n\s*\n', '\n\n', content)
+    content = re.sub(r"\s+", " ", content)
+    content = re.sub(r"\n\s*\n", "\n\n", content)
 
     # Decode HTML entities
     import html
+
     content = html.unescape(content)
 
     if len(content) > max_chars:
-        content = content[:max_chars] + f"\n\n[Content truncated at {max_chars} characters]"
+        content = (
+            content[:max_chars] + f"\n\n[Content truncated at {max_chars} characters]"
+        )
 
     return content.strip()
 
@@ -552,6 +611,7 @@ def fetch_filing_content(filing: Filing, max_chars: int = 100000) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility: Filing to Dict (for JSON serialization)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def filing_to_dict(filing: Filing) -> dict:
     """Convert Filing to JSON-serializable dict."""
@@ -611,6 +671,7 @@ SEC_DAILY_INDEX_URL = "https://www.sec.gov/cgi-bin/browse-edgar"
 @dataclass
 class InsiderScanResult:
     """Result from market-wide insider scan."""
+
     ticker: str
     company_name: str
     cik: str
@@ -711,13 +772,15 @@ def _fetch_recent_form4_filings(days_back: int = 7) -> list[dict]:
                 cik_padded = cik.strip().zfill(10)
                 ticker = cik_to_ticker.get(cik_padded, "")
 
-                filings.append({
-                    "cik": cik_padded,
-                    "company_name": company.strip(),
-                    "ticker": ticker,
-                    "filing_date": date_filed.strip(),
-                    "accession_number": accession,
-                })
+                filings.append(
+                    {
+                        "cik": cik_padded,
+                        "company_name": company.strip(),
+                        "ticker": ticker,
+                        "filing_date": date_filed.strip(),
+                        "accession_number": accession,
+                    }
+                )
 
         except requests.HTTPError as e:
             # Index file doesn't exist for this date (holiday, etc.)
@@ -816,8 +879,11 @@ def scan_recent_form4s(
                 try:
                     # Fetch the full filing to get primary document
                     full_filings = fetch_filings(ticker, form_types=["4"], limit=20)
-                    matching = [f for f in full_filings
-                               if f.accession_number == filing_info["accession_number"]]
+                    matching = [
+                        f
+                        for f in full_filings
+                        if f.accession_number == filing_info["accession_number"]
+                    ]
 
                     if not matching:
                         continue
@@ -828,7 +894,10 @@ def scan_recent_form4s(
                     # Extract transactions
                     for txn in form4.non_derivative_transactions:
                         # Filter by transaction type
-                        if transaction_filter == "purchase" and txn.transaction_code != "P":
+                        if (
+                            transaction_filter == "purchase"
+                            and txn.transaction_code != "P"
+                        ):
                             continue
                         if transaction_filter == "sale" and txn.transaction_code != "S":
                             continue
@@ -845,7 +914,9 @@ def scan_recent_form4s(
                             accession_number=form4.accession_number,
                             reporter_name=form4.reporter_name,
                             transaction_type=txn.transaction_code,
-                            net_shares=txn.shares if txn.acquired_disposed == "A" else -txn.shares,
+                            net_shares=txn.shares
+                            if txn.acquired_disposed == "A"
+                            else -txn.shares,
                             total_value=total_value,
                         )
                         ticker_results.append(result)
@@ -909,16 +980,20 @@ def find_cluster_buying(
     cluster_stocks = []
     for ticker in scan["tickers"]:
         summary = scan["summary"].get(ticker, {})
-        cluster_stocks.append({
-            "ticker": ticker,
-            "unique_insiders": summary.get("unique_insiders", 0),
-            "total_transactions": summary.get("total_transactions", 0),
-            "net_shares_bought": summary.get("net_shares", 0),
-            "total_value": summary.get("total_value", 0),
-            "details": scan["details"].get(ticker, []),
-        })
+        cluster_stocks.append(
+            {
+                "ticker": ticker,
+                "unique_insiders": summary.get("unique_insiders", 0),
+                "total_transactions": summary.get("total_transactions", 0),
+                "net_shares_bought": summary.get("net_shares", 0),
+                "total_value": summary.get("total_value", 0),
+                "details": scan["details"].get(ticker, []),
+            }
+        )
 
     # Sort by unique insiders, then by total value
-    cluster_stocks.sort(key=lambda x: (x["unique_insiders"], x["total_value"] or 0), reverse=True)
+    cluster_stocks.sort(
+        key=lambda x: (x["unique_insiders"], x["total_value"] or 0), reverse=True
+    )
 
     return cluster_stocks

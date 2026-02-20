@@ -14,31 +14,151 @@ from fredapi import Fred
 
 # Curated list of high-impact series for trading/macro analysis
 POPULAR_SERIES = [
-    {"id": "FEDFUNDS", "name": "Federal Funds Rate", "category": "rates", "frequency": "monthly"},
-    {"id": "DGS10", "name": "10-Year Treasury Yield", "category": "rates", "frequency": "daily"},
-    {"id": "DGS2", "name": "2-Year Treasury Yield", "category": "rates", "frequency": "daily"},
-    {"id": "T10Y2Y", "name": "10Y-2Y Yield Spread (Recession Indicator)", "category": "rates", "frequency": "daily"},
-    {"id": "T10YIE", "name": "10-Year Breakeven Inflation", "category": "inflation", "frequency": "daily"},
-    {"id": "CPIAUCSL", "name": "Consumer Price Index (CPI)", "category": "inflation", "frequency": "monthly"},
-    {"id": "CPILFESL", "name": "Core CPI (Ex Food & Energy)", "category": "inflation", "frequency": "monthly"},
-    {"id": "PCEPI", "name": "PCE Price Index (Fed's Preferred)", "category": "inflation", "frequency": "monthly"},
-    {"id": "UNRATE", "name": "Unemployment Rate", "category": "employment", "frequency": "monthly"},
-    {"id": "PAYEMS", "name": "Nonfarm Payrolls", "category": "employment", "frequency": "monthly"},
-    {"id": "ICSA", "name": "Initial Jobless Claims", "category": "employment", "frequency": "weekly"},
-    {"id": "GDP", "name": "Gross Domestic Product", "category": "output", "frequency": "quarterly"},
+    {
+        "id": "FEDFUNDS",
+        "name": "Federal Funds Rate",
+        "category": "rates",
+        "frequency": "monthly",
+    },
+    {
+        "id": "DGS10",
+        "name": "10-Year Treasury Yield",
+        "category": "rates",
+        "frequency": "daily",
+    },
+    {
+        "id": "DGS2",
+        "name": "2-Year Treasury Yield",
+        "category": "rates",
+        "frequency": "daily",
+    },
+    {
+        "id": "T10Y2Y",
+        "name": "10Y-2Y Yield Spread (Recession Indicator)",
+        "category": "rates",
+        "frequency": "daily",
+    },
+    {
+        "id": "T10YIE",
+        "name": "10-Year Breakeven Inflation",
+        "category": "inflation",
+        "frequency": "daily",
+    },
+    {
+        "id": "CPIAUCSL",
+        "name": "Consumer Price Index (CPI)",
+        "category": "inflation",
+        "frequency": "monthly",
+    },
+    {
+        "id": "CPILFESL",
+        "name": "Core CPI (Ex Food & Energy)",
+        "category": "inflation",
+        "frequency": "monthly",
+    },
+    {
+        "id": "PCEPI",
+        "name": "PCE Price Index (Fed's Preferred)",
+        "category": "inflation",
+        "frequency": "monthly",
+    },
+    {
+        "id": "UNRATE",
+        "name": "Unemployment Rate",
+        "category": "employment",
+        "frequency": "monthly",
+    },
+    {
+        "id": "PAYEMS",
+        "name": "Nonfarm Payrolls",
+        "category": "employment",
+        "frequency": "monthly",
+    },
+    {
+        "id": "ICSA",
+        "name": "Initial Jobless Claims",
+        "category": "employment",
+        "frequency": "weekly",
+    },
+    {
+        "id": "GDP",
+        "name": "Gross Domestic Product",
+        "category": "output",
+        "frequency": "quarterly",
+    },
     {"id": "GDPC1", "name": "Real GDP", "category": "output", "frequency": "quarterly"},
-    {"id": "INDPRO", "name": "Industrial Production Index", "category": "output", "frequency": "monthly"},
-    {"id": "VIXCLS", "name": "VIX (Volatility Index)", "category": "volatility", "frequency": "daily"},
-    {"id": "DEXUSEU", "name": "EUR/USD Exchange Rate", "category": "fx", "frequency": "daily"},
-    {"id": "DTWEXBGS", "name": "US Dollar Index (Broad)", "category": "fx", "frequency": "daily"},
-    {"id": "M2SL", "name": "M2 Money Supply", "category": "money", "frequency": "monthly"},
-    {"id": "WALCL", "name": "Fed Balance Sheet (Total Assets)", "category": "money", "frequency": "weekly"},
-    {"id": "MORTGAGE30US", "name": "30-Year Mortgage Rate", "category": "rates", "frequency": "weekly"},
-    {"id": "HOUST", "name": "Housing Starts", "category": "housing", "frequency": "monthly"},
-    {"id": "UMCSENT", "name": "Consumer Sentiment (UMich)", "category": "sentiment", "frequency": "monthly"},
-    {"id": "BAMLH0A0HYM2", "name": "High Yield Credit Spread", "category": "credit", "frequency": "daily"},
-    {"id": "DCOILWTICO", "name": "WTI Crude Oil Price", "category": "commodities", "frequency": "daily"},
-    {"id": "GOLDAMGBD228NLBM", "name": "Gold Price (London Fix)", "category": "commodities", "frequency": "daily"},
+    {
+        "id": "INDPRO",
+        "name": "Industrial Production Index",
+        "category": "output",
+        "frequency": "monthly",
+    },
+    {
+        "id": "VIXCLS",
+        "name": "VIX (Volatility Index)",
+        "category": "volatility",
+        "frequency": "daily",
+    },
+    {
+        "id": "DEXUSEU",
+        "name": "EUR/USD Exchange Rate",
+        "category": "fx",
+        "frequency": "daily",
+    },
+    {
+        "id": "DTWEXBGS",
+        "name": "US Dollar Index (Broad)",
+        "category": "fx",
+        "frequency": "daily",
+    },
+    {
+        "id": "M2SL",
+        "name": "M2 Money Supply",
+        "category": "money",
+        "frequency": "monthly",
+    },
+    {
+        "id": "WALCL",
+        "name": "Fed Balance Sheet (Total Assets)",
+        "category": "money",
+        "frequency": "weekly",
+    },
+    {
+        "id": "MORTGAGE30US",
+        "name": "30-Year Mortgage Rate",
+        "category": "rates",
+        "frequency": "weekly",
+    },
+    {
+        "id": "HOUST",
+        "name": "Housing Starts",
+        "category": "housing",
+        "frequency": "monthly",
+    },
+    {
+        "id": "UMCSENT",
+        "name": "Consumer Sentiment (UMich)",
+        "category": "sentiment",
+        "frequency": "monthly",
+    },
+    {
+        "id": "BAMLH0A0HYM2",
+        "name": "High Yield Credit Spread",
+        "category": "credit",
+        "frequency": "daily",
+    },
+    {
+        "id": "DCOILWTICO",
+        "name": "WTI Crude Oil Price",
+        "category": "commodities",
+        "frequency": "daily",
+    },
+    {
+        "id": "GOLDAMGBD228NLBM",
+        "name": "Gold Price (London Fix)",
+        "category": "commodities",
+        "frequency": "daily",
+    },
 ]
 
 
@@ -67,7 +187,9 @@ class FREDProvider:
         if not end:
             end = datetime.now().strftime("%Y-%m-%d")
 
-        series = self.fred.get_series(series_id, observation_start=start, observation_end=end)
+        series = self.fred.get_series(
+            series_id, observation_start=start, observation_end=end
+        )
         # fredapi returns a pandas Series with DatetimeIndex
         df = series.dropna().reset_index()
         df.columns = ["date", "value"]
@@ -100,6 +222,7 @@ class FREDProvider:
     def _search_via_api(self, query: str, limit: int = 20) -> list[dict]:
         """Direct FRED API search, bypassing fredapi's buggy date parser."""
         import requests
+
         url = "https://api.stlouisfed.org/fred/series/search"
         params = {
             "search_text": query,
@@ -118,7 +241,9 @@ class FREDProvider:
                 "title": s.get("title", ""),
                 "frequency": s.get("frequency_short", s.get("frequency", "")),
                 "units": s.get("units", ""),
-                "seasonal_adjustment": s.get("seasonal_adjustment_short", s.get("seasonal_adjustment", "")),
+                "seasonal_adjustment": s.get(
+                    "seasonal_adjustment_short", s.get("seasonal_adjustment", "")
+                ),
                 "last_updated": s.get("last_updated", ""),
             }
             for s in serieses[:limit]
@@ -152,14 +277,25 @@ class FREDProvider:
 
         out = []
         for _, row in results.head(limit).iterrows():
-            out.append({
-                "id": row.get("id", row.name) if "id" in results.columns else row.name,
-                "title": str(row.get("title", "")),
-                "frequency": str(row.get("frequency_short", row.get("frequency", ""))),
-                "units": str(row.get("units", "")),
-                "seasonal_adjustment": str(row.get("seasonal_adjustment_short", row.get("seasonal_adjustment", ""))),
-                "last_updated": str(row.get("last_updated", "")),
-            })
+            out.append(
+                {
+                    "id": row.get("id", row.name)
+                    if "id" in results.columns
+                    else row.name,
+                    "title": str(row.get("title", "")),
+                    "frequency": str(
+                        row.get("frequency_short", row.get("frequency", ""))
+                    ),
+                    "units": str(row.get("units", "")),
+                    "seasonal_adjustment": str(
+                        row.get(
+                            "seasonal_adjustment_short",
+                            row.get("seasonal_adjustment", ""),
+                        )
+                    ),
+                    "last_updated": str(row.get("last_updated", "")),
+                }
+            )
         return out
 
     def get_series_info(self, series_id: str) -> dict:
@@ -194,11 +330,13 @@ class FREDProvider:
                 date_str = pd.Timestamp(date_val).strftime("%Y-%m-%d")
                 if upcoming and date_str < today:
                     continue
-                result.append({
-                    "date": date_str,
-                    "series_id": series_id,
-                    "series_name": series_name,
-                })
+                result.append(
+                    {
+                        "date": date_str,
+                        "series_id": series_id,
+                        "series_name": series_name,
+                    }
+                )
             return result
         except Exception:
             return []
@@ -263,11 +401,14 @@ def get_fred() -> FREDProvider:
     global _fred_provider
     if _fred_provider is None:
         import os
+
         api_key = os.environ.get("FRED_API_KEY")
         if api_key:
             _fred_provider = FREDProvider(api_key)
         else:
-            raise RuntimeError("FRED not configured. Call configure_fred(api_key) first.")
+            raise RuntimeError(
+                "FRED not configured. Call configure_fred(api_key) first."
+            )
     return _fred_provider
 
 

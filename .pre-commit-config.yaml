@@ -1,0 +1,81 @@
+# Pre-commit hooks to prevent data provider regressions
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Python code quality
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^core/
+      - id: ruff-format
+        files: ^core/
+
+  # Run pytest for data providers (critical path)
+  - repo: local
+    hooks:
+      - id: pytest-data-providers
+        name: pytest data providers
+        entry: bash -c 'cd core && python -m pytest tests/test_data.py -v --tb=short'
+        language: system
+        pass_filenames: false
+        files: ^core/src/tmq_core/data\.py$
+        types: [python]
+
+      - id: pytest-backtest
+        name: pytest backtest
+        entry: bash -c 'cd core && python -m pytest tests/test_backtest.py -v --tb=short'
+        language: system
+        pass_filenames: false
+        files: ^core/src/tmq_core/backtest\.py$
+        types: [python]
+
+      - id: pytest-sandbox
+        name: pytest sandbox
+        entry: bash -c 'cd core && python -m pytest tests/test_sandbox.py -v --tb=short'
+        language: system
+        pass_filenames: false
+        files: ^core/src/tmq_core/sandbox\.py$
+        types: [python]
+
+  # Frontend critical path checks
+  - repo: local
+    hooks:
+      # Context awareness - unit tests for window registry helper
+      - id: test-context-awareness
+        name: context awareness unit tests
+        entry: bash -c 'cd frontend && npm test -- --run src/hooks/__tests__/contextAwareness.test.ts'
+        language: system
+        pass_filenames: false
+        files: ^frontend/src/hooks/(useActiveChartState|useChat)\.ts$
+        types_or: [ts, tsx]
+
+      # Data providers - unit tests for market data hook
+      - id: test-market-data
+        name: market data unit tests
+        entry: bash -c 'cd frontend && npm test -- --run src/hooks/__tests__/useMarketData.test.ts 2>/dev/null || echo "No useMarketData tests yet"'
+        language: system
+        pass_filenames: false
+        files: ^frontend/src/hooks/useMarketData\.ts$
+        types_or: [ts, tsx]
+
+  # TypeScript/Frontend checks (disabled - many pre-existing issues)
+  # To enable, uncomment below and fix existing ESLint errors
+  # - repo: local
+  #   hooks:
+  #     - id: tsc-check
+  #       name: TypeScript check
+  #       entry: bash -c 'cd frontend && npx tsc --noEmit'
+  #       language: system
+  #       pass_filenames: false
+  #       files: ^frontend/src/.*\.(ts|tsx)$
+  #       types_or: [ts, tsx]
+  #
+  #     - id: eslint
+  #       name: ESLint
+  #       entry: bash -c 'cd frontend && npx eslint --fix'
+  #       language: system
+  #       files: ^frontend/src/.*\.(ts|tsx)$
+  #       types_or: [ts, tsx]

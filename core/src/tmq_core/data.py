@@ -8,14 +8,80 @@ from typing import Protocol
 import ccxt
 import pandas as pd
 import yfinance as yf
-
-logger = logging.getLogger(__name__)
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
+logger = logging.getLogger(__name__)
+
+# Intervals that require full timestamp (not just date)
+# Used across all providers for consistent formatting
+INTRADAY_INTERVALS = frozenset(
+    {
+        "1m",
+        "2m",
+        "5m",
+        "15m",
+        "30m",
+        "60m",
+        "90m",  # Minutes
+        "1h",
+        "2h",
+        "4h",  # Hours
+    }
+)
+
+# Supported intervals per provider:
+# - YFinance: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
+#   (intraday limited to last 7-60 days depending on interval)
+# - CCXT/Coinbase: 1m, 5m, 15m, 1h, 6h, 1d (exchange-dependent)
+# - Alpaca: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 1wk, 1mo
+
+# Valid intervals per provider (for validation)
+YFINANCE_INTERVALS = frozenset(
+    {
+        "1m",
+        "2m",
+        "5m",
+        "15m",
+        "30m",
+        "60m",
+        "90m",
+        "1h",
+        "1d",
+        "5d",
+        "1wk",
+        "1mo",
+        "3mo",
+    }
+)
+CCXT_INTERVALS = frozenset({"1m", "5m", "15m", "1h", "6h", "1d"})
+ALPACA_INTERVALS = frozenset({"1m", "5m", "15m", "30m", "1h", "4h", "1d", "1wk", "1mo"})
+
+
+def validate_interval(interval: str, provider: str) -> bool:
+    """Check if interval is supported by provider.
+
+    Args:
+        interval: Candle interval (e.g., "1d", "1h", "15m")
+        provider: Provider name ("yfinance", "ccxt", "alpaca")
+
+    Returns:
+        True if interval is supported, False otherwise
+    """
+    if provider == "yfinance":
+        return interval in YFINANCE_INTERVALS
+    elif provider == "ccxt":
+        return interval in CCXT_INTERVALS
+    elif provider == "alpaca":
+        return interval in ALPACA_INTERVALS
+    return True  # Unknown provider, assume valid
+
+
 class DataProvider(Protocol):
-    def fetch_ohlcv(self, symbol: str, interval: str, start: str, end: str) -> pd.DataFrame:
+    def fetch_ohlcv(
+        self, symbol: str, interval: str, start: str, end: str
+    ) -> pd.DataFrame:
         """Returns DataFrame with columns: date, open, high, low, close, volume"""
         ...
 
@@ -24,14 +90,22 @@ class YFinanceProvider:
     MAX_RETRIES = 3
     RETRY_DELAYS = [1, 2, 4]  # Exponential backoff in seconds
 
-    def fetch_ohlcv(self, symbol: str, interval: str, start: str, end: str) -> pd.DataFrame:
-        empty_df = pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
+    def fetch_ohlcv(
+        self, symbol: str, interval: str, start: str, end: str
+    ) -> pd.DataFrame:
+        empty_df = pd.DataFrame(
+            columns=["date", "open", "high", "low", "close", "volume"]
+        )
 
         for attempt in range(self.MAX_RETRIES):
             try:
                 df = yf.download(
-                    symbol, start=start, end=end, interval=interval,
-                    multi_level_index=False, progress=False
+                    symbol,
+                    start=start,
+                    end=end,
+                    interval=interval,
+                    multi_level_index=False,
+                    progress=False,
                 )
 
                 # Check if download returned empty DataFrame
@@ -70,7 +144,12 @@ class YFinanceProvider:
                         return empty_df
 
                 # Convert date column to ISO string
-                df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+                # For intraday intervals, preserve the full timestamp
+                df["date"] = pd.to_datetime(df["date"])
+                if interval in INTRADAY_INTERVALS:
+                    df["date"] = df["date"].dt.strftime("%Y-%m-%dT%H:%M:%S")
+                else:
+                    df["date"] = df["date"].dt.strftime("%Y-%m-%d")
                 df = df[["date", "open", "high", "low", "close", "volume"]]
                 # Ensure float64 for numeric columns
                 for col in ["open", "high", "low", "close", "volume"]:
@@ -95,33 +174,90 @@ class YFinanceProvider:
 
         return empty_df
 
+
 class CCXTProvider:
+    MAX_RETRIES = 3
+    RETRY_DELAYS = [1, 2, 4]  # Exponential backoff in seconds
+
     def __init__(self, exchange_id: str = "coinbase"):
         self.exchange: ccxt.Exchange = getattr(ccxt, exchange_id)()
 
-    def fetch_ohlcv(self, symbol: str, interval: str, start: str, end: str) -> pd.DataFrame:
-        self.exchange.load_markets()
-        since = self.exchange.parse8601(start + "T00:00:00Z")
-        end_ts = self.exchange.parse8601(end + "T00:00:00Z")
-        all_candles: list[list] = []
-        while since < end_ts:
-            candles = self.exchange.fetch_ohlcv(symbol, interval, since, limit=1000)
-            if not candles:
-                break
-            # Filter out candles beyond end date
-            candles = [c for c in candles if c[0] < end_ts]
-            if not candles:
-                break
-            all_candles.extend(candles)
-            since = candles[-1][0] + 1
-        df = pd.DataFrame(all_candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
-        df["date"] = pd.to_datetime(df["timestamp"], unit="ms").dt.strftime("%Y-%m-%d")
-        df = df[["date", "open", "high", "low", "close", "volume"]]
-        for col in ["open", "high", "low", "close", "volume"]:
-            df[col] = df[col].astype("float64")
-        df = df.dropna().reset_index(drop=True)
-        df = df.sort_values("date").reset_index(drop=True)
-        return df
+    def fetch_ohlcv(
+        self, symbol: str, interval: str, start: str, end: str
+    ) -> pd.DataFrame:
+        empty_df = pd.DataFrame(
+            columns=["date", "open", "high", "low", "close", "volume"]
+        )
+
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                self.exchange.load_markets()
+                since = self.exchange.parse8601(start + "T00:00:00Z")
+                end_ts = self.exchange.parse8601(end + "T00:00:00Z")
+                all_candles: list[list] = []
+
+                while since < end_ts:
+                    candles = self.exchange.fetch_ohlcv(
+                        symbol, interval, since, limit=1000
+                    )
+                    if not candles:
+                        break
+                    # Filter out candles beyond end date
+                    candles = [c for c in candles if c[0] < end_ts]
+                    if not candles:
+                        break
+                    all_candles.extend(candles)
+                    since = candles[-1][0] + 1
+
+                # Check if we got any data
+                if not all_candles:
+                    if attempt < self.MAX_RETRIES - 1:
+                        delay = self.RETRY_DELAYS[attempt]
+                        logger.warning(
+                            f"CCXT returned no candles for {symbol}, "
+                            f"retrying in {delay}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                        )
+                        time.sleep(delay)
+                        continue
+                    else:
+                        logger.warning(
+                            f"CCXT returned no candles for {symbol} after "
+                            f"{self.MAX_RETRIES} attempts, returning empty result"
+                        )
+                        return empty_df
+
+                df = pd.DataFrame(
+                    all_candles,
+                    columns=["timestamp", "open", "high", "low", "close", "volume"],
+                )
+                # For intraday intervals, preserve the full timestamp
+                df["date"] = pd.to_datetime(df["timestamp"], unit="ms")
+                if interval in INTRADAY_INTERVALS:
+                    df["date"] = df["date"].dt.strftime("%Y-%m-%dT%H:%M:%S")
+                else:
+                    df["date"] = df["date"].dt.strftime("%Y-%m-%d")
+                df = df[["date", "open", "high", "low", "close", "volume"]]
+                for col in ["open", "high", "low", "close", "volume"]:
+                    df[col] = df[col].astype("float64")
+                df = df.dropna().reset_index(drop=True)
+                df = df.sort_values("date").reset_index(drop=True)
+                return df
+
+            except Exception as e:
+                if attempt < self.MAX_RETRIES - 1:
+                    delay = self.RETRY_DELAYS[attempt]
+                    logger.warning(
+                        f"CCXT error for {symbol}: {e}, "
+                        f"retrying in {delay}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(
+                        f"CCXT failed for {symbol} after {self.MAX_RETRIES} attempts: {e}"
+                    )
+                    return empty_df
+
+        return empty_df
 
 
 _ALPACA_INTERVAL_MAP: dict[str, TimeFrame] = {
@@ -138,30 +274,82 @@ _ALPACA_INTERVAL_MAP: dict[str, TimeFrame] = {
 
 
 class AlpacaProvider:
+    MAX_RETRIES = 3
+    RETRY_DELAYS = [1, 2, 4]  # Exponential backoff in seconds
+
     def __init__(self, api_key: str, api_secret: str):
         self.client = StockHistoricalDataClient(api_key=api_key, secret_key=api_secret)
 
-    def fetch_ohlcv(self, symbol: str, interval: str, start: str, end: str) -> pd.DataFrame:
+    def fetch_ohlcv(
+        self, symbol: str, interval: str, start: str, end: str
+    ) -> pd.DataFrame:
+        empty_df = pd.DataFrame(
+            columns=["date", "open", "high", "low", "close", "volume"]
+        )
+
         timeframe = _ALPACA_INTERVAL_MAP.get(interval)
         if timeframe is None:
-            raise ValueError(f"Unsupported Alpaca interval: {interval}. Supported: {list(_ALPACA_INTERVAL_MAP)}")
+            raise ValueError(
+                f"Unsupported Alpaca interval: {interval}. Supported: {list(_ALPACA_INTERVAL_MAP)}"
+            )
 
-        request = StockBarsRequest(
-            symbol_or_symbols=symbol,
-            timeframe=timeframe,
-            start=datetime.fromisoformat(start),
-            end=datetime.fromisoformat(end) + timedelta(days=1),
-        )
-        bars = self.client.get_stock_bars(request)
-        df = bars.df.reset_index()
-        df.columns = [c.lower() for c in df.columns]
-        df["date"] = pd.to_datetime(df["timestamp"]).dt.strftime("%Y-%m-%d")
-        df = df[["date", "open", "high", "low", "close", "volume"]]
-        for col in ["open", "high", "low", "close", "volume"]:
-            df[col] = df[col].astype("float64")
-        df = df.dropna().reset_index(drop=True)
-        df = df.sort_values("date").reset_index(drop=True)
-        return df
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                request = StockBarsRequest(
+                    symbol_or_symbols=symbol,
+                    timeframe=timeframe,
+                    start=datetime.fromisoformat(start),
+                    end=datetime.fromisoformat(end) + timedelta(days=1),
+                )
+                bars = self.client.get_stock_bars(request)
+
+                # Check if we got any data
+                if bars.df.empty:
+                    if attempt < self.MAX_RETRIES - 1:
+                        delay = self.RETRY_DELAYS[attempt]
+                        logger.warning(
+                            f"Alpaca returned empty DataFrame for {symbol}, "
+                            f"retrying in {delay}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                        )
+                        time.sleep(delay)
+                        continue
+                    else:
+                        logger.warning(
+                            f"Alpaca returned empty DataFrame for {symbol} after "
+                            f"{self.MAX_RETRIES} attempts, returning empty result"
+                        )
+                        return empty_df
+
+                df = bars.df.reset_index()
+                df.columns = [c.lower() for c in df.columns]
+                # For intraday intervals, preserve the full timestamp
+                df["date"] = pd.to_datetime(df["timestamp"])
+                if interval in INTRADAY_INTERVALS:
+                    df["date"] = df["date"].dt.strftime("%Y-%m-%dT%H:%M:%S")
+                else:
+                    df["date"] = df["date"].dt.strftime("%Y-%m-%d")
+                df = df[["date", "open", "high", "low", "close", "volume"]]
+                for col in ["open", "high", "low", "close", "volume"]:
+                    df[col] = df[col].astype("float64")
+                df = df.dropna().reset_index(drop=True)
+                df = df.sort_values("date").reset_index(drop=True)
+                return df
+
+            except Exception as e:
+                if attempt < self.MAX_RETRIES - 1:
+                    delay = self.RETRY_DELAYS[attempt]
+                    logger.warning(
+                        f"Alpaca error for {symbol}: {e}, "
+                        f"retrying in {delay}s (attempt {attempt + 1}/{self.MAX_RETRIES})"
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(
+                        f"Alpaca failed for {symbol} after {self.MAX_RETRIES} attempts: {e}"
+                    )
+                    return empty_df
+
+        return empty_df
 
 
 _alpaca_provider: AlpacaProvider | None = None
@@ -180,7 +368,9 @@ def get_available_symbols(quote: str = "USD") -> list[str]:
     return sorted(s for s in exchange.markets if s.endswith("/" + quote))
 
 
-def get_provider(symbol: str, preferred_equity_provider: str = "yfinance") -> DataProvider:
+def get_provider(
+    symbol: str, preferred_equity_provider: str = "yfinance"
+) -> DataProvider:
     """Auto-detect: if '/' in symbol use CCXT, otherwise use preferred equity provider."""
     if "/" in symbol:
         return CCXTProvider()
@@ -192,14 +382,20 @@ def get_provider(symbol: str, preferred_equity_provider: str = "yfinance") -> Da
 def fetch_ohlcv(
     symbol: str, interval: str, start: str, end: str, equity_provider: str = "yfinance"
 ) -> pd.DataFrame:
-    """One-liner that auto-detects provider and fetches data"""
+    """One-liner that auto-detects provider and fetches data."""
     provider = get_provider(symbol, preferred_equity_provider=equity_provider)
+    provider_name = "ccxt" if "/" in symbol else equity_provider
+
+    if not validate_interval(interval, provider_name):
+        logger.warning(f"Interval '{interval}' may not be supported by {provider_name}")
+
     return provider.fetch_ohlcv(symbol, interval, start, end)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Universe Functions (for market-wide scans)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def get_tradeable_universe(
     asset_class: str = "us_equity",
@@ -247,7 +443,9 @@ def get_tradeable_universe(
     client = TradingClient(api_key=api_key, secret_key=api_secret)
 
     # Build request
-    asset_class_enum = AssetClass.US_EQUITY if asset_class == "us_equity" else AssetClass.CRYPTO
+    asset_class_enum = (
+        AssetClass.US_EQUITY if asset_class == "us_equity" else AssetClass.CRYPTO
+    )
 
     request_params = GetAssetsRequest(asset_class=asset_class_enum)
 
@@ -266,15 +464,17 @@ def get_tradeable_universe(
         if exchange and asset.exchange.value != exchange:
             continue
 
-        result.append({
-            "symbol": asset.symbol,
-            "name": asset.name,
-            "exchange": asset.exchange.value if asset.exchange else None,
-            "asset_class": asset.asset_class.value if asset.asset_class else None,
-            "tradable": asset.tradable,
-            "shortable": asset.shortable,
-            "easy_to_borrow": asset.easy_to_borrow,
-        })
+        result.append(
+            {
+                "symbol": asset.symbol,
+                "name": asset.name,
+                "exchange": asset.exchange.value if asset.exchange else None,
+                "asset_class": asset.asset_class.value if asset.asset_class else None,
+                "tradable": asset.tradable,
+                "shortable": asset.shortable,
+                "easy_to_borrow": asset.easy_to_borrow,
+            }
+        )
 
     return result
 
@@ -297,12 +497,78 @@ def get_sector_stocks(sector: str) -> list[str]:
     # Common sector proxies via ETFs or well-known constituents
     # In production, this would query a fundamentals API
     SECTOR_PROXIES = {
-        "technology": ["AAPL", "MSFT", "GOOGL", "NVDA", "META", "AMZN", "CRM", "ADBE", "INTC", "AMD"],
-        "healthcare": ["JNJ", "UNH", "PFE", "ABBV", "MRK", "TMO", "LLY", "ABT", "BMY", "CVS"],
-        "financials": ["JPM", "BAC", "WFC", "GS", "MS", "C", "AXP", "BLK", "SCHW", "USB"],
-        "energy": ["XOM", "CVX", "COP", "SLB", "EOG", "MPC", "OXY", "PSX", "VLO", "PXD"],
-        "consumer": ["WMT", "PG", "KO", "PEP", "COST", "HD", "MCD", "NKE", "SBUX", "TGT"],
-        "industrials": ["BA", "CAT", "GE", "MMM", "HON", "UPS", "LMT", "RTX", "DE", "UNP"],
+        "technology": [
+            "AAPL",
+            "MSFT",
+            "GOOGL",
+            "NVDA",
+            "META",
+            "AMZN",
+            "CRM",
+            "ADBE",
+            "INTC",
+            "AMD",
+        ],
+        "healthcare": [
+            "JNJ",
+            "UNH",
+            "PFE",
+            "ABBV",
+            "MRK",
+            "TMO",
+            "LLY",
+            "ABT",
+            "BMY",
+            "CVS",
+        ],
+        "financials": [
+            "JPM",
+            "BAC",
+            "WFC",
+            "GS",
+            "MS",
+            "C",
+            "AXP",
+            "BLK",
+            "SCHW",
+            "USB",
+        ],
+        "energy": [
+            "XOM",
+            "CVX",
+            "COP",
+            "SLB",
+            "EOG",
+            "MPC",
+            "OXY",
+            "PSX",
+            "VLO",
+            "PXD",
+        ],
+        "consumer": [
+            "WMT",
+            "PG",
+            "KO",
+            "PEP",
+            "COST",
+            "HD",
+            "MCD",
+            "NKE",
+            "SBUX",
+            "TGT",
+        ],
+        "industrials": [
+            "BA",
+            "CAT",
+            "GE",
+            "MMM",
+            "HON",
+            "UPS",
+            "LMT",
+            "RTX",
+            "DE",
+            "UNP",
+        ],
     }
 
     sector_lower = sector.lower()

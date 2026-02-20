@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useChatWithUIActions } from '../../hooks';
 import { ChatMessage, ChatInput, QuickActions, TypingIndicator } from '../chat';
 
@@ -6,10 +6,27 @@ export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
   const { messages, isTyping, sendMessage, stopGeneration } = useChatWithUIActions();
   const [isOpen, setIsOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
 
-  // Auto-scroll to bottom on new messages
+  // Check if user is near the bottom of the scroll container
+  const checkIfNearBottom = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return true;
+    const threshold = 100; // px from bottom
+    return container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+  }, []);
+
+  // Update near-bottom state on scroll
+  const handleScroll = useCallback(() => {
+    isNearBottomRef.current = checkIfNearBottom();
+  }, [checkIfNearBottom]);
+
+  // Auto-scroll to bottom only if user is near bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, isTyping]);
 
   return (
@@ -52,7 +69,11 @@ export function ChatSidebar({ style }: { style?: React.CSSProperties }) {
 
         <QuickActions onAction={sendMessage} disabled={isTyping} />
 
-        <div className="flex-1 overflow-y-auto p-3">
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto p-3"
+        >
           {messages.map((msg) => (
             <ChatMessage key={msg.id} message={msg} />
           ))}

@@ -238,6 +238,7 @@ export function useChat({ apiKey, model, useOpenRouter = false, serverProvider =
                 try {
                   const parsed = JSON.parse(event.result);
                   if (parsed._action) {
+                    console.log('[useChat] UI action detected:', parsed._action, parsed);
                     onUIActionRef.current?.(parsed as UIAction);
                   }
                 } catch {

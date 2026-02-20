@@ -9,7 +9,9 @@ def msft_df():
 
 
 def test_sma_crossover():
-    result = run_backtest("MSFT", "sma_crossover", start="2020-01-01", end="2024-12-31", fast=10, slow=30)
+    result = run_backtest(
+        "MSFT", "sma_crossover", start="2020-01-01", end="2024-12-31", fast=10, slow=30
+    )
     assert isinstance(result, BacktestResult)
     assert "sharpe" in result.metrics
     assert "max_drawdown" in result.metrics
@@ -20,13 +22,17 @@ def test_sma_crossover():
 
 
 def test_rsi_mean_reversion():
-    result = run_backtest("MSFT", "rsi_mean_reversion", start="2020-01-01", end="2024-12-31")
+    result = run_backtest(
+        "MSFT", "rsi_mean_reversion", start="2020-01-01", end="2024-12-31"
+    )
     assert isinstance(result, BacktestResult)
     assert result.metrics["total_trades"] >= 0
 
 
 def test_momentum():
-    result = run_backtest("MSFT", "momentum", start="2020-01-01", end="2024-12-31", lookback=20)
+    result = run_backtest(
+        "MSFT", "momentum", start="2020-01-01", end="2024-12-31", lookback=20
+    )
     assert isinstance(result, BacktestResult)
 
 
@@ -45,7 +51,15 @@ def test_backtest_result_structure():
     assert "date" in result.equity_curve[0]
     assert "equity" in result.equity_curve[0]
     # Metrics should have all required fields
-    required = ["sharpe", "max_drawdown", "cagr", "win_rate", "total_return", "total_trades", "profit_factor"]
+    required = [
+        "sharpe",
+        "max_drawdown",
+        "cagr",
+        "win_rate",
+        "total_return",
+        "total_trades",
+        "profit_factor",
+    ]
     for key in required:
         assert key in result.metrics, f"Missing metric: {key}"
 
@@ -62,4 +76,5 @@ def test_sharpe_is_real_number():
     """Sharpe should be a real finite number, not NaN or Inf"""
     result = run_backtest("MSFT", "sma_crossover", start="2020-01-01", end="2024-12-31")
     import math
+
     assert math.isfinite(result.metrics["sharpe"])

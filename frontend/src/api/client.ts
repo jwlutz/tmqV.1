@@ -400,7 +400,7 @@ export interface ChatContext {
 
 // UI action returned from AI tools
 export interface UIAction {
-  _action: 'set_widget' | 'set_layout' | 'set_symbol' | 'toggle_code_panel' | 'open_tab' | 'apply_indicator';
+  _action: 'set_widget' | 'set_layout' | 'set_symbol' | 'toggle_code_panel' | 'open_tab' | 'apply_indicator' | 'set_interval' | 'select_tab';
   pane_id?: string;
   widget_type?: string;
   layout?: string;
@@ -409,6 +409,8 @@ export interface UIAction {
   open?: boolean;
   tab_type?: 'chart' | 'chat' | 'code' | 'backtest' | 'rot' | 'sec';
   indicator?: string;
+  interval?: string;
+  tab_id?: string;
 }
 
 export interface ChatOptions {

@@ -17,11 +17,14 @@ app = FastAPI(title="TMQ Core API")
 _request_rate_limit: dict[str, float] = {}
 RATE_LIMIT_SECONDS = 60
 MAX_MESSAGE_LENGTH = 2000
-FEATURE_REQUESTS_FILE = Path(__file__).parent.parent.parent.parent / "feature_requests.json"
+FEATURE_REQUESTS_FILE = (
+    Path(__file__).parent.parent.parent.parent / "feature_requests.json"
+)
 
 
 class FeatureRequestBody(BaseModel):
     message: str = Field(..., max_length=MAX_MESSAGE_LENGTH)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,11 +87,13 @@ def feature_request(body: FeatureRequestBody, request: Request):
             requests_list = []
 
     # Append new request
-    requests_list.append({
-        "timestamp": datetime.utcnow().isoformat(),
-        "ip": client_ip,
-        "message": body.message.strip(),
-    })
+    requests_list.append(
+        {
+            "timestamp": datetime.utcnow().isoformat(),
+            "ip": client_ip,
+            "message": body.message.strip(),
+        }
+    )
 
     # Save back to file
     FEATURE_REQUESTS_FILE.write_text(json.dumps(requests_list, indent=2))

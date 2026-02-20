@@ -16,7 +16,10 @@ from tmq_core.schemas import BacktestResult
 # Each entry: call(close, df, **params) → (entries, exits) boolean Series
 # ---------------------------------------------------------------------------
 
-def _sma_crossover(close: pd.Series, df: pd.DataFrame, fast: int = 10, slow: int = 30) -> tuple[pd.Series, pd.Series]:
+
+def _sma_crossover(
+    close: pd.Series, df: pd.DataFrame, fast: int = 10, slow: int = 30
+) -> tuple[pd.Series, pd.Series]:
     fast_sma = close.rolling(fast).mean()
     slow_sma = close.rolling(slow).mean()
     entries = (fast_sma > slow_sma) & (fast_sma.shift(1) <= slow_sma.shift(1))
@@ -24,7 +27,13 @@ def _sma_crossover(close: pd.Series, df: pd.DataFrame, fast: int = 10, slow: int
     return entries.fillna(False), exits.fillna(False)
 
 
-def _rsi_mean_reversion(close: pd.Series, df: pd.DataFrame, length: int = 14, oversold: int = 30, overbought: int = 70) -> tuple[pd.Series, pd.Series]:
+def _rsi_mean_reversion(
+    close: pd.Series,
+    df: pd.DataFrame,
+    length: int = 14,
+    oversold: int = 30,
+    overbought: int = 70,
+) -> tuple[pd.Series, pd.Series]:
     delta = close.diff()
     gain = delta.clip(lower=0).rolling(length).mean()
     loss = (-delta.clip(upper=0)).rolling(length).mean()
@@ -35,7 +44,9 @@ def _rsi_mean_reversion(close: pd.Series, df: pd.DataFrame, length: int = 14, ov
     return entries.fillna(False), exits.fillna(False)
 
 
-def _momentum(close: pd.Series, df: pd.DataFrame, lookback: int = 20, threshold: float = 0.0) -> tuple[pd.Series, pd.Series]:
+def _momentum(
+    close: pd.Series, df: pd.DataFrame, lookback: int = 20, threshold: float = 0.0
+) -> tuple[pd.Series, pd.Series]:
     returns = close.pct_change(lookback)
     entries = (returns > threshold) & (returns.shift(1) <= threshold)
     exits = (returns < threshold) & (returns.shift(1) >= threshold)
@@ -76,6 +87,7 @@ STRATEGIES: dict[str, dict] = {
 # ---------------------------------------------------------------------------
 # BacktestProvider protocol + VectorBT implementation
 # ---------------------------------------------------------------------------
+
 
 class BacktestProvider(Protocol):
     def run(self, strategy: str, data: pd.DataFrame, **params) -> BacktestResult: ...
@@ -164,17 +176,27 @@ def _extract_trades(pf: vbt.Portfolio, dates: pd.Series) -> list[dict]:
     trades_df = pf.trades.records_readable
     result = []
     for _, row in trades_df.iterrows():
-        entry_idx = int(row["Entry Timestamp"]) if isinstance(row["Entry Timestamp"], (int, float, np.integer)) else 0
-        exit_idx = int(row["Exit Timestamp"]) if isinstance(row["Exit Timestamp"], (int, float, np.integer)) else len(dates) - 1
+        entry_idx = (
+            int(row["Entry Timestamp"])
+            if isinstance(row["Entry Timestamp"], (int, float, np.integer))
+            else 0
+        )
+        exit_idx = (
+            int(row["Exit Timestamp"])
+            if isinstance(row["Exit Timestamp"], (int, float, np.integer))
+            else len(dates) - 1
+        )
         entry_idx = min(entry_idx, len(dates) - 1)
         exit_idx = min(exit_idx, len(dates) - 1)
-        result.append({
-            "entry_date": str(dates.iloc[entry_idx]),
-            "exit_date": str(dates.iloc[exit_idx]),
-            "side": str(row["Direction"]).lower(),
-            "pnl": float(row["PnL"]),
-            "return_pct": float(row["Return"]),
-        })
+        result.append(
+            {
+                "entry_date": str(dates.iloc[entry_idx]),
+                "exit_date": str(dates.iloc[exit_idx]),
+                "side": str(row["Direction"]).lower(),
+                "pnl": float(row["PnL"]),
+                "return_pct": float(row["Return"]),
+            }
+        )
     return result
 
 
@@ -188,7 +210,9 @@ class VectorBTProvider:
     ) -> BacktestResult:
         name = strategy.lower()
         if name not in STRATEGIES:
-            raise ValueError(f"Unknown strategy '{strategy}'. Use list_strategies() to see options.")
+            raise ValueError(
+                f"Unknown strategy '{strategy}'. Use list_strategies() to see options."
+            )
 
         symbol = params.pop("_symbol", "")
         timeframe = params.pop("_timeframe", "1d")
@@ -202,7 +226,9 @@ class VectorBTProvider:
         entries = entries.astype(bool).reset_index(drop=True)
         exits = exits.astype(bool).reset_index(drop=True)
 
-        pf = vbt.Portfolio.from_signals(close, entries, exits, init_cash=init_cash, freq="1D")
+        pf = vbt.Portfolio.from_signals(
+            close, entries, exits, init_cash=init_cash, freq="1D"
+        )
 
         # Extract date range for metadata
         start_date = str(dates.iloc[0]) if len(dates) > 0 else None
@@ -225,7 +251,11 @@ class VectorBTProvider:
 
     def list_strategies(self) -> list[dict]:
         return [
-            {"name": name, "description": spec["description"], "default_params": spec["defaults"]}
+            {
+                "name": name,
+                "description": spec["description"],
+                "default_params": spec["defaults"],
+            }
             for name, spec in STRATEGIES.items()
         ]
 

@@ -1,7 +1,19 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from tmq_backend.config import get_configured_providers
+
+# Suppress noisy socket.send errors when clients disconnect mid-stream
+# This happens frequently with SSE when users navigate away or stop generation
+class SocketSendFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "socket.send() raised exception" not in record.getMessage()
+
+# Apply filter to relevant loggers
+for logger_name in ["websockets", "uvicorn.error", "uvicorn.access"]:
+    logging.getLogger(logger_name).addFilter(SocketSendFilter())
 from tmq_backend.routes.data import router as data_router
 from tmq_backend.routes.indicators import router as indicators_router
 from tmq_backend.routes.backtest import router as backtest_router

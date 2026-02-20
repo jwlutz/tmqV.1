@@ -25,6 +25,7 @@ FAKE_DF = pd.DataFrame(
 def test_symbols_returns_list(mock_symbols):
     # Clear cache so our mock is used
     import tmq_core.server as srv
+
     srv._symbols_cache = None
 
     resp = client.get("/api/symbols")
@@ -37,6 +38,7 @@ def test_symbols_returns_list(mock_symbols):
 @patch("tmq_core.server.get_available_symbols", return_value=FAKE_SYMBOLS)
 def test_symbols_caches(mock_symbols):
     import tmq_core.server as srv
+
     srv._symbols_cache = None
 
     client.get("/api/symbols")
@@ -50,12 +52,15 @@ def test_symbols_caches(mock_symbols):
 
 @patch("tmq_core.server.fetch_ohlcv", return_value=FAKE_DF)
 def test_ohlcv_returns_data(mock_fetch):
-    resp = client.get("/api/ohlcv", params={
-        "symbol": "BTC/USD",
-        "interval": "1d",
-        "start": "2024-01-01",
-        "end": "2024-01-03",
-    })
+    resp = client.get(
+        "/api/ohlcv",
+        params={
+            "symbol": "BTC/USD",
+            "interval": "1d",
+            "start": "2024-01-01",
+            "end": "2024-01-03",
+        },
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["symbol"] == "BTC/USD"

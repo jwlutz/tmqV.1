@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 
 import litellm
@@ -64,7 +65,7 @@ def execute_tool(name: str, args: dict) -> str:
             df = fetch_ohlcv(
                 args["symbol"], "1d", args.get("start"), args.get("end")
             )
-            result = execute_custom_strategy(args["code"], df)
+            result = execute_custom_strategy(args["code"], df, symbol=args["symbol"])
             return json.dumps({
                 "symbol": args["symbol"],
                 "strategy": "custom",
@@ -110,7 +111,7 @@ def execute_tool(name: str, args: dict) -> str:
             )
             macro_aligned = align_macro_to_prices(macro, df)
             result = execute_custom_strategy(
-                args["code"], df, macro_data=macro_aligned
+                args["code"], df, macro_data=macro_aligned, symbol=args["symbol"]
             )
             return json.dumps(
                 {
@@ -280,6 +281,20 @@ def execute_tool(name: str, args: dict) -> str:
                 "_action": "apply_indicator",
                 "pane_id": args.get("pane_id"),  # None means active pane
                 "indicator": args["indicator"],
+            })
+
+        elif name == "tmq_set_interval":
+            return json.dumps({
+                "_action": "set_interval",
+                "pane_id": args.get("pane_id"),  # None means active pane
+                "interval": args["interval"],
+            })
+
+        elif name == "tmq_select_tab":
+            return json.dumps({
+                "_action": "select_tab",
+                "tab_id": args.get("tab_id"),
+                "tab_type": args.get("tab_type"),
             })
 
         return json.dumps({"error": f"Unknown tool: {name}"})
@@ -474,6 +489,9 @@ async def chat_stream(
                     "content": result,
                 })
 
+    except (asyncio.CancelledError, GeneratorExit):
+        # Client disconnected mid-stream - this is normal, not an error
+        return
     except Exception as e:
         # Catch-all for any unexpected errors
         yield _sse({"type": "error", "content": f"Unexpected error: {e}"})

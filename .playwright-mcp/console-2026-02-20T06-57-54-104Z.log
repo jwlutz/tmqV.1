@@ -1,0 +1,1 @@
+[    8435ms] [WARNING] WebSocket connection to 'wss://ws-feed.exchange.coinbase.com/' failed: WebSocket is closed before the connection is established. @ http://localhost:5173/src/lib/ws.ts:59

@@ -48,7 +48,9 @@ def test_atr(msft_df):
 
 def test_get_indicator_convenience():
     """One-liner should work"""
-    result = get_indicator("MSFT", "rsi", interval="1d", start="2024-06-01", end="2025-01-01", length=14)
+    result = get_indicator(
+        "MSFT", "rsi", interval="1d", start="2024-06-01", end="2025-01-01", length=14
+    )
     assert "rsi" in result.columns
     assert len(result) > 30
 

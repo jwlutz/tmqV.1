@@ -1,4 +1,4 @@
-import { useState, KeyboardEvent } from 'react';
+import { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { useActionConfirmation } from '../../context/ActionConfirmationContext';
 
 interface ChatInputProps {
@@ -12,6 +12,16 @@ interface ChatInputProps {
 export function ChatInput({ onSend, onStop, isTyping = false, disabled = false, placeholder = 'Ask about your strategy...' }: ChatInputProps) {
   const [input, setInput] = useState('');
   const { preferences, setMode } = useActionConfirmation();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [input]);
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -40,6 +50,7 @@ export function ChatInput({ onSend, onStop, isTyping = false, disabled = false, 
     <div className="border-t border-[var(--border)] p-3 space-y-2">
       <div className="flex items-end gap-2 bg-[var(--bg-medium)] rounded-xl p-2">
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -48,8 +59,8 @@ export function ChatInput({ onSend, onStop, isTyping = false, disabled = false, 
           aria-label="Chat message input"
           rows={1}
           className="flex-1 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-tertiary)]
-                     text-sm resize-none outline-none min-h-[24px] max-h-[120px] py-1 px-2"
-          style={{ height: 'auto' }}
+                     text-sm resize-none outline-none min-h-[24px] max-h-[300px] py-1 px-2
+                     overflow-y-auto"
         />
         {isTyping ? (
           <button

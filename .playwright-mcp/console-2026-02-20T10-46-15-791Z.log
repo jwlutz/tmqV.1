@@ -1,0 +1,57 @@
+[     259ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5173/api/config:0
+[     259ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5173/api/config:0
+[     266ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5173/api/sec/filings?ticker=AAPL&limit=100:0
+[     275ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5173/api/sec/filings?ticker=AAPL&limit=100:0
+[    6666ms] [WARNING] WebSocket connection to 'wss://ws-feed.exchange.coinbase.com/' failed: WebSocket is closed before the connection is established. @ http://localhost:5173/src/lib/ws.ts:59
+[   23621ms] Error: useAppContext must be used within AppProvider
+    at useAppContext (http://localhost:5173/src/context/AppContext.tsx:259:11)
+    at useSettingsOverlay (http://localhost:5173/src/context/AppContext.tsx:383:45)
+    at AppContent (http://localhost:5173/src/App.tsx?t=1771584337623:27:45)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:11596:26)
+    at mountIndeterminateComponent (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:14974:21)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:15962:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:3680:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:3705:24)
+    at invokeGuardedCallback (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:3739:39)
+    at beginWork$1 (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:19818:15)
+[   23624ms] Error: useAppContext must be used within AppProvider
+    at useAppContext (http://localhost:5173/src/context/AppContext.tsx:259:11)
+    at useSettingsOverlay (http://localhost:5173/src/context/AppContext.tsx:383:45)
+    at AppContent (http://localhost:5173/src/App.tsx?t=1771584337623:27:45)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:11596:26)
+    at mountIndeterminateComponent (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:14974:21)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:15962:22)
+    at HTMLUnknownElement.callCallback2 (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:3680:22)
+    at Object.invokeGuardedCallbackDev (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:3705:24)
+    at invokeGuardedCallback (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:3739:39)
+    at beginWork$1 (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:19818:15)
+[   23625ms] [ERROR] The above error occurred in the <AppContent> component:
+
+    at AppContent (http://localhost:5173/src/App.tsx?t=1771584337623:27:45)
+    at ActionConfirmationProvider (http://localhost:5173/src/context/ActionConfirmationContext.tsx:31:46)
+    at AppProvider (http://localhost:5173/src/context/AppContext.tsx?t=1771584399304:33:31)
+    at App
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:14079
+[   23631ms] Error: useAppContext must be used within AppProvider
+    at useAppContext (http://localhost:5173/src/context/AppContext.tsx:259:11)
+    at useSettingsOverlay (http://localhost:5173/src/context/AppContext.tsx:383:45)
+    at AppContent (http://localhost:5173/src/App.tsx?t=1771584337623:27:45)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:11596:26)
+    at mountIndeterminateComponent (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:14974:21)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:15962:22)
+    at beginWork$1 (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:19806:22)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:19251:20)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:19190:13)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/chunk-CMSQVTYY.js?v=070cdf5f:19169:15)
+[   23685ms] [WARNING] WebSocket connection to 'wss://ws-feed.exchange.coinbase.com/' failed: WebSocket is closed before the connection is established. @ http://localhost:5173/src/lib/ws.ts:59
+[   51345ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://localhost:5173/node_modules/.vite/deps/recharts.js?v=070cdf5f:9187
+[   51346ms] [WARNING] The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width. @ http://localhost:5173/node_modules/.vite/deps/recharts.js?v=070cdf5f:9187
+[  211164ms] [WARNING] WebSocket connection to 'wss://ws-feed.exchange.coinbase.com/' failed: WebSocket is closed before the connection is established. @ http://localhost:5173/src/lib/ws.ts:59

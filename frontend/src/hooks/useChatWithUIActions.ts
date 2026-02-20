@@ -65,7 +65,7 @@ export function useChatWithUIActions() {
   const { requestConfirmation } = useActionConfirmation();
 
   // Get workspace state for AI context (layout is from AppContext, chart state from window registry)
-  const { layout, setLayout, applyLayoutPreset } = useChartLayout();
+  const { layout } = useChartLayout();
   const { codePanelOpen, setCodePanelOpen, setSandboxCode } = useCodePanel();
 
   // Create stable refs for values used in getter function
@@ -95,6 +95,8 @@ export function useChatWithUIActions() {
 
   // Handle UI actions from AI (widget changes, layout changes, etc.)
   const handleUIAction = useCallback((action: UIAction) => {
+    console.log('[handleUIAction] Received action:', action._action, action);
+
     // Helper to get active chart tab ID (FlexLayout tab, not AppContext pane)
     const getActiveChartTabId = () => window.__activeChartTabId;
 
@@ -114,10 +116,16 @@ export function useChatWithUIActions() {
         }
         break;
       case 'set_layout':
-        if (action.preset) {
-          applyLayoutPreset(action.preset);
-        } else if (action.layout) {
-          setLayout(action.layout as ChartLayout);
+        {
+          // Use FlexLayout window functions instead of AppContext
+          const applyPreset = (window as unknown as { __flexLayoutApplyPreset?: (preset: string) => boolean }).__flexLayoutApplyPreset;
+          const setLayoutFn = (window as unknown as { __flexLayoutSetLayout?: (layout: string) => boolean }).__flexLayoutSetLayout;
+
+          if (action.preset && applyPreset) {
+            applyPreset(action.preset);
+          } else if (action.layout && setLayoutFn) {
+            setLayoutFn(action.layout);
+          }
         }
         break;
       case 'set_symbol':
@@ -150,6 +158,29 @@ export function useChatWithUIActions() {
           }
         }
         break;
+      case 'set_interval':
+        if (action.interval) {
+          // Use FlexLayout chart tab registry
+          const targetTabId = action.pane_id || getActiveChartTabId();
+          const setIntervalFn = targetTabId && window.__chartSetInterval?.get(targetTabId);
+          if (setIntervalFn) {
+            setIntervalFn(action.interval);
+          } else {
+            // Fallback: try first available chart tab
+            const firstEntry = window.__chartSetInterval?.entries().next().value;
+            if (firstEntry) firstEntry[1](action.interval);
+          }
+        }
+        break;
+      case 'select_tab':
+        {
+          // Use the exposed flexlayout selectTab function
+          const selectTab = (window as unknown as { __flexLayoutSelectTab?: (tabId?: string, tabType?: string) => void }).__flexLayoutSelectTab;
+          if (selectTab) {
+            selectTab(action.tab_id, action.tab_type);
+          }
+        }
+        break;
       case 'apply_indicator':
         if (action.indicator) {
           // Use FlexLayout chart tab registry
@@ -170,7 +201,7 @@ export function useChatWithUIActions() {
         }
         break;
     }
-  }, [codePanelOpen, setLayout, applyLayoutPreset, setCodePanelOpen]);
+  }, [codePanelOpen, setCodePanelOpen]);
 
   const chatResult = useChat({
     apiKey: effectiveApiKey,

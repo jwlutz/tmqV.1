@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 import pandas as pd
 import ta
 
 from tmq_core.data import fetch_ohlcv
 
+
 def _require_cols(df: pd.DataFrame, cols: list[str]) -> None:
     missing = [c for c in cols if c not in df.columns]
     if missing:
         raise ValueError(f"Input DataFrame missing required columns: {missing}")
+
 
 def _finalize(result: pd.DataFrame | pd.Series, dates: pd.Series) -> pd.DataFrame:
     if isinstance(result, pd.Series):
@@ -22,22 +24,29 @@ def _finalize(result: pd.DataFrame | pd.Series, dates: pd.Series) -> pd.DataFram
     cols = ["date"] + [c for c in out.columns if c != "date"]
     return out[cols]
 
+
 # Each entry maps our indicator name -> {description, defaults, call(df, **params) -> DataFrame}
 INDICATORS: dict[str, dict[str, Any]] = {
     "rsi": {
         "description": "Relative Strength Index",
         "defaults": {"length": 14},
-        "call": lambda df, **p: ta.momentum.rsi(df["close"], window=int(p["length"])).rename("rsi"),
+        "call": lambda df, **p: ta.momentum.rsi(
+            df["close"], window=int(p["length"])
+        ).rename("rsi"),
     },
     "sma": {
         "description": "Simple Moving Average",
         "defaults": {"length": 20},
-        "call": lambda df, **p: ta.trend.sma_indicator(df["close"], window=int(p["length"])).rename("sma"),
+        "call": lambda df, **p: ta.trend.sma_indicator(
+            df["close"], window=int(p["length"])
+        ).rename("sma"),
     },
     "ema": {
         "description": "Exponential Moving Average",
         "defaults": {"length": 20},
-        "call": lambda df, **p: ta.trend.ema_indicator(df["close"], window=int(p["length"])).rename("ema"),
+        "call": lambda df, **p: ta.trend.ema_indicator(
+            df["close"], window=int(p["length"])
+        ).rename("ema"),
     },
     "macd": {
         "description": "Moving Average Convergence Divergence",
@@ -67,13 +76,15 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "bbands": {
         "description": "Bollinger Bands",
         "defaults": {"length": 20, "std": 2.0},
-        "call": lambda df, **p: (lambda bb: pd.DataFrame(
-            {
-                "bb_lower": bb.bollinger_lband(),
-                "bb_mid": bb.bollinger_mavg(),
-                "bb_upper": bb.bollinger_hband(),
-            }
-        ))(
+        "call": lambda df, **p: (
+            lambda bb: pd.DataFrame(
+                {
+                    "bb_lower": bb.bollinger_lband(),
+                    "bb_mid": bb.bollinger_mavg(),
+                    "bb_upper": bb.bollinger_hband(),
+                }
+            )
+        )(
             ta.volatility.BollingerBands(
                 df["close"],
                 window=int(p["length"]),
@@ -116,13 +127,15 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "adx": {
         "description": "Average Directional Index",
         "defaults": {"length": 14},
-        "call": lambda df, **p: (lambda a: pd.DataFrame(
-            {
-                "adx": a.adx(),
-                "adx_plus": a.adx_pos(),
-                "adx_minus": a.adx_neg(),
-            }
-        ))(
+        "call": lambda df, **p: (
+            lambda a: pd.DataFrame(
+                {
+                    "adx": a.adx(),
+                    "adx_plus": a.adx_pos(),
+                    "adx_minus": a.adx_neg(),
+                }
+            )
+        )(
             ta.trend.ADXIndicator(
                 high=df["high"],
                 low=df["low"],
@@ -134,7 +147,9 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "obv": {
         "description": "On-Balance Volume",
         "defaults": {},
-        "call": lambda df, **p: ta.volume.on_balance_volume(df["close"], df["volume"]).rename("obv"),
+        "call": lambda df, **p: ta.volume.on_balance_volume(
+            df["close"], df["volume"]
+        ).rename("obv"),
     },
     "vwap": {
         "description": "Volume Weighted Average Price",
@@ -193,12 +208,16 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "roc": {
         "description": "Rate of Change",
         "defaults": {"length": 10},
-        "call": lambda df, **p: ta.momentum.roc(df["close"], window=int(p["length"])).rename("roc"),
+        "call": lambda df, **p: ta.momentum.roc(
+            df["close"], window=int(p["length"])
+        ).rename("roc"),
     },
     "trix": {
         "description": "Triple Exponential Average",
         "defaults": {"length": 18},
-        "call": lambda df, **p: ta.trend.trix(df["close"], window=int(p["length"])).rename("trix"),
+        "call": lambda df, **p: ta.trend.trix(
+            df["close"], window=int(p["length"])
+        ).rename("trix"),
     },
     "ppo": {
         "description": "Percentage Price Oscillator",
@@ -229,25 +248,27 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "aroon": {
         "description": "Aroon Indicator",
         "defaults": {"length": 25},
-        "call": lambda df, **p: (lambda a: pd.DataFrame(
-            {
-                "aroon_down": a.aroon_down(),
-                "aroon_up": a.aroon_up(),
-                "aroon_osc": a.aroon_indicator(),
-            }
-        ))(
-            ta.trend.AroonIndicator(close=df["close"], window=int(p["length"]))
-        ),
+        "call": lambda df, **p: (
+            lambda a: pd.DataFrame(
+                {
+                    "aroon_down": a.aroon_down(),
+                    "aroon_up": a.aroon_up(),
+                    "aroon_osc": a.aroon_indicator(),
+                }
+            )
+        )(ta.trend.AroonIndicator(close=df["close"], window=int(p["length"]))),
     },
     "stochrsi": {
         "description": "Stochastic RSI",
         "defaults": {"length": 14, "rsi_length": 14, "k": 3, "d": 3},
-        "call": lambda df, **p: (lambda s: pd.DataFrame(
-            {
-                "stochrsi_k": s.stochrsi_k(),
-                "stochrsi_d": s.stochrsi_d(),
-            }
-        ))(
+        "call": lambda df, **p: (
+            lambda s: pd.DataFrame(
+                {
+                    "stochrsi_k": s.stochrsi_k(),
+                    "stochrsi_d": s.stochrsi_d(),
+                }
+            )
+        )(
             ta.momentum.StochRSIIndicator(
                 close=df["close"],
                 window=int(p["length"]),
@@ -274,13 +295,15 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "kc": {
         "description": "Keltner Channels",
         "defaults": {"length": 20, "scalar": 2},
-        "call": lambda df, **p: (lambda kc: pd.DataFrame(
-            {
-                "kc_lower": kc.keltner_channel_lband(),
-                "kc_basis": kc.keltner_channel_mband(),
-                "kc_upper": kc.keltner_channel_hband(),
-            }
-        ))(
+        "call": lambda df, **p: (
+            lambda kc: pd.DataFrame(
+                {
+                    "kc_lower": kc.keltner_channel_lband(),
+                    "kc_basis": kc.keltner_channel_mband(),
+                    "kc_upper": kc.keltner_channel_hband(),
+                }
+            )
+        )(
             ta.volatility.KeltnerChannel(
                 high=df["high"],
                 low=df["low"],
@@ -295,13 +318,15 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "donchian": {
         "description": "Donchian Channels",
         "defaults": {"lower_length": 20, "upper_length": 20},
-        "call": lambda df, **p: (lambda dc: pd.DataFrame(
-            {
-                "dc_lower": dc.donchian_channel_lband(),
-                "dc_mid": dc.donchian_channel_mband(),
-                "dc_upper": dc.donchian_channel_hband(),
-            }
-        ))(
+        "call": lambda df, **p: (
+            lambda dc: pd.DataFrame(
+                {
+                    "dc_lower": dc.donchian_channel_lband(),
+                    "dc_mid": dc.donchian_channel_mband(),
+                    "dc_upper": dc.donchian_channel_hband(),
+                }
+            )
+        )(
             ta.volatility.DonchianChannel(
                 high=df["high"],
                 low=df["low"],
@@ -314,12 +339,14 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "supertrend": {
         "description": "SuperTrend",
         "defaults": {"length": 7, "multiplier": 3.0},
-        "call": lambda df, **p: (lambda st: pd.DataFrame(
-            {
-                "supertrend": st.supertrend(),
-                "supertrend_direction": st.supertrend_direction(),
-            }
-        ))(
+        "call": lambda df, **p: (
+            lambda st: pd.DataFrame(
+                {
+                    "supertrend": st.supertrend(),
+                    "supertrend_direction": st.supertrend_direction(),
+                }
+            )
+        )(
             ta.trend.STCIndicator(
                 close=df["close"],
                 window_slow=int(max(2, p["length"] * 2)),
@@ -333,14 +360,16 @@ INDICATORS: dict[str, dict[str, Any]] = {
     "ichimoku": {
         "description": "Ichimoku Cloud",
         "defaults": {"tenkan": 9, "kijun": 26, "senkou": 52},
-        "call": lambda df, **p: (lambda ic: pd.DataFrame(
-            {
-                "ichimoku_tenkan": ic.ichimoku_conversion_line(),
-                "ichimoku_kijun": ic.ichimoku_base_line(),
-                "ichimoku_span_a": ic.ichimoku_a(),
-                "ichimoku_span_b": ic.ichimoku_b(),
-            }
-        ))(
+        "call": lambda df, **p: (
+            lambda ic: pd.DataFrame(
+                {
+                    "ichimoku_tenkan": ic.ichimoku_conversion_line(),
+                    "ichimoku_kijun": ic.ichimoku_base_line(),
+                    "ichimoku_span_a": ic.ichimoku_a(),
+                    "ichimoku_span_b": ic.ichimoku_b(),
+                }
+            )
+        )(
             ta.trend.IchimokuIndicator(
                 high=df["high"],
                 low=df["low"],
@@ -365,14 +394,18 @@ def compute_indicator(df: pd.DataFrame, indicator: str, **params: Any) -> pd.Dat
 
     name = indicator.lower()
     if name not in INDICATORS:
-        raise ValueError(f"Unknown indicator '{indicator}'. Use list_indicators() to see available options.")
+        raise ValueError(
+            f"Unknown indicator '{indicator}'. Use list_indicators() to see available options."
+        )
 
     spec = INDICATORS[name]
     merged = {**spec["defaults"], **params}
 
     result = spec["call"](df, **merged)
     if result is None:
-        raise ValueError(f"Indicator '{indicator}' returned no data. Check input DataFrame.")
+        raise ValueError(
+            f"Indicator '{indicator}' returned no data. Check input DataFrame."
+        )
 
     return _finalize(result, df["date"])
 
@@ -398,6 +431,10 @@ def get_indicator(
 def list_indicators() -> list[dict[str, Any]]:
     """Return list of supported indicators with descriptions and default params."""
     return [
-        {"name": name, "description": spec["description"], "default_params": spec["defaults"]}
+        {
+            "name": name,
+            "description": spec["description"],
+            "default_params": spec["defaults"],
+        }
         for name, spec in INDICATORS.items()
     ]

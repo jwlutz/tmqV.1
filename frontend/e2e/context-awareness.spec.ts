@@ -46,8 +46,13 @@ test.describe('AI Context Awareness', () => {
       if (setSymbol) setSymbol('AAPL');
     });
 
-    // Small wait for React state update
-    await page.waitForTimeout(100);
+    // Wait for React state update
+    await page.waitForFunction(() => {
+      const activeTabId = window.__activeChartTabId;
+      if (!activeTabId) return false;
+      const getState = window.__chartGetState?.get(activeTabId);
+      return getState?.().symbol === 'AAPL';
+    }, { timeout: 5000 });
 
     // Verify getter returns updated state
     const updatedState = await page.evaluate(() => {
@@ -113,7 +118,13 @@ test.describe('AI Context Awareness', () => {
       if (setSymbol) setSymbol('UNIQUE-TEST-SYMBOL');
     });
 
-    await page.waitForTimeout(100);
+    // Wait for React state update
+    await page.waitForFunction(() => {
+      const activeTabId = window.__activeChartTabId;
+      if (!activeTabId) return false;
+      const getState = window.__chartGetState?.get(activeTabId);
+      return getState?.().symbol === 'UNIQUE-TEST-SYMBOL';
+    }, { timeout: 5000 });
 
     // Intercept the chat API request
     let capturedContext: unknown = null;
@@ -174,7 +185,13 @@ test.describe('AI Context Awareness', () => {
       }
     });
 
-    await page.waitForTimeout(100);
+    // Wait for final state to settle
+    await page.waitForFunction(() => {
+      const activeTabId = window.__activeChartTabId;
+      if (!activeTabId) return false;
+      const getState = window.__chartGetState?.get(activeTabId);
+      return getState?.().symbol === 'FINAL-SYMBOL';
+    }, { timeout: 5000 });
 
     // Verify final state
     const finalState = await page.evaluate(() => {
@@ -196,7 +213,13 @@ test.describe('AI Context Awareness', () => {
       if (setWidget) setWidget('net_liquidity');
     });
 
-    await page.waitForTimeout(100);
+    // Wait for widget type state update
+    await page.waitForFunction(() => {
+      const activeTabId = window.__activeChartTabId;
+      if (!activeTabId) return false;
+      const getState = window.__chartGetState?.get(activeTabId);
+      return getState?.().widgetType === 'net_liquidity';
+    }, { timeout: 5000 });
 
     const state = await page.evaluate(() => {
       const activeTabId = window.__activeChartTabId;
@@ -217,7 +240,13 @@ test.describe('AI Context Awareness', () => {
       if (setInterval) setInterval('4h');
     });
 
-    await page.waitForTimeout(100);
+    // Wait for interval state update
+    await page.waitForFunction(() => {
+      const activeTabId = window.__activeChartTabId;
+      if (!activeTabId) return false;
+      const getState = window.__chartGetState?.get(activeTabId);
+      return getState?.().interval === '4h';
+    }, { timeout: 5000 });
 
     const state = await page.evaluate(() => {
       const activeTabId = window.__activeChartTabId;

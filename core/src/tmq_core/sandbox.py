@@ -15,22 +15,43 @@ _ALLOWED_IMPORTS = {"pandas", "pd", "numpy", "np", "pandas_ta_classic", "ta", "m
 
 # Dangerous builtins to block
 _BLOCKED_BUILTINS = {
-    "open", "exec", "eval", "compile", "__import__", "globals", "locals",
-    "getattr", "setattr", "delattr", "breakpoint", "exit", "quit",
-    "input", "memoryview", "classmethod", "staticmethod", "property",
-    "super", "type", "vars", "dir",
+    "open",
+    "exec",
+    "eval",
+    "compile",
+    "__import__",
+    "globals",
+    "locals",
+    "getattr",
+    "setattr",
+    "delattr",
+    "breakpoint",
+    "exit",
+    "quit",
+    "input",
+    "memoryview",
+    "classmethod",
+    "staticmethod",
+    "property",
+    "super",
+    "type",
+    "vars",
+    "dir",
 }
 
 
 def _make_safe_import(allowed_modules: set[str]):
     """Create a restricted __import__ that only allows whitelisted modules."""
     import builtins
+
     _real_import = builtins.__import__
 
     def _safe_import(name, *args, **kwargs):
         top_level = name.split(".")[0]
         if top_level not in allowed_modules:
-            raise ImportError(f"Import of '{name}' is not allowed in sandbox. Allowed: {sorted(allowed_modules)}")
+            raise ImportError(
+                f"Import of '{name}' is not allowed in sandbox. Allowed: {sorted(allowed_modules)}"
+            )
         return _real_import(name, *args, **kwargs)
 
     return _safe_import
@@ -40,11 +61,15 @@ def _build_namespace() -> dict:
     """Build a restricted namespace for exec."""
     import pandas_ta_classic
 
-    safe_builtins = {
-        k: v for k, v in __builtins__.items() if k not in _BLOCKED_BUILTINS
-    } if isinstance(__builtins__, dict) else {
-        k: getattr(__builtins__, k) for k in dir(__builtins__) if k not in _BLOCKED_BUILTINS
-    }
+    safe_builtins = (
+        {k: v for k, v in __builtins__.items() if k not in _BLOCKED_BUILTINS}
+        if isinstance(__builtins__, dict)
+        else {
+            k: getattr(__builtins__, k)
+            for k in dir(__builtins__)
+            if k not in _BLOCKED_BUILTINS
+        }
+    )
 
     allowed_modules = {"pandas", "numpy", "pandas_ta_classic", "math"}
     safe_builtins["__import__"] = _make_safe_import(allowed_modules)
@@ -81,19 +106,32 @@ def _run_with_timeout(func, args=(), timeout: float = 30.0) -> Any:
     return result[0]
 
 
-def _run_portfolio(close: pd.Series, entries: pd.Series, exits: pd.Series, init_cash: float) -> BacktestResult:
+def _run_portfolio(
+    close: pd.Series,
+    entries: pd.Series,
+    exits: pd.Series,
+    init_cash: float,
+    dates: pd.Series,
+    symbol: str = "custom",
+) -> BacktestResult:
     """Run vectorbt portfolio from signals and extract results."""
-    from tmq_core.backtest import _extract_metrics, _extract_equity_curve, _extract_trades
+    from tmq_core.backtest import (
+        _extract_metrics,
+        _extract_equity_curve,
+        _extract_trades,
+    )
 
     close = close.reset_index(drop=True)
     entries = entries.astype(bool).reset_index(drop=True)
     exits = exits.astype(bool).reset_index(drop=True)
+    dates = dates.reset_index(drop=True)
 
-    pf = vbt.Portfolio.from_signals(close, entries, exits, init_cash=init_cash, freq="1D")
-    dates = pd.Series([str(i) for i in range(len(close))])
+    pf = vbt.Portfolio.from_signals(
+        close, entries, exits, init_cash=init_cash, freq="1D"
+    )
 
     return BacktestResult(
-        symbol="custom",
+        symbol=symbol,
         strategy="custom",
         parameters={},
         metrics=_extract_metrics(pf, init_cash),
@@ -108,6 +146,7 @@ def execute_custom_strategy(
     df: pd.DataFrame,
     init_cash: float = 10000,
     macro_data: pd.DataFrame | None = None,
+    symbol: str = "custom",
 ) -> BacktestResult:
     """
     Execute AI-generated signal code against OHLCV data.
@@ -146,10 +185,13 @@ def execute_custom_strategy(
     if not isinstance(entries, pd.Series) or not isinstance(exits, pd.Series):
         raise TypeError("generate_signals must return two pandas Series")
     if len(entries) != len(df) or len(exits) != len(df):
-        raise ValueError(f"Signal Series must have same length as input ({len(df)}), got entries={len(entries)}, exits={len(exits)}")
+        raise ValueError(
+            f"Signal Series must have same length as input ({len(df)}), got entries={len(entries)}, exits={len(exits)}"
+        )
 
     close = df["close"].astype(float)
-    return _run_portfolio(close, entries, exits, init_cash)
+    dates = df["date"].astype(str)
+    return _run_portfolio(close, entries, exits, init_cash, dates, symbol)
 
 
 def execute_analysis(

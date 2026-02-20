@@ -58,6 +58,6 @@ def backtest(req: BacktestRequest):
 @router.post("/backtest/custom")
 def backtest_custom(req: CustomBacktestRequest):
     df = fetch_ohlcv(req.symbol, "1d", req.start, req.end)
-    result = execute_custom_strategy(req.code, df)
+    result = execute_custom_strategy(req.code, df, symbol=req.symbol)
     # Return FULL BacktestResult
     return JSONResponse(content=_sanitize_floats(result.model_dump()))
