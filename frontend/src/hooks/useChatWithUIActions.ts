@@ -27,10 +27,15 @@ function getChartContextFromRegistry(layout: ChartLayout, codePanelOpen: boolean
   // Read from window registry for live chart tab state
   window.__chartGetState?.forEach((getState, tabId) => {
     const state = getState();
+    // Also get indicator state for this pane
+    const indicatorState = window.__chartGetIndicatorState?.get(tabId)?.();
+
     const paneInfo: ChartPaneInfo = {
       id: tabId,
       symbol: state.symbol,
       widgetType: state.widgetType,
+      activeIndicators: indicatorState?.selectedIds,
+      showVolume: indicatorState?.showVolume,
     };
     chartPanes.push(paneInfo);
 
@@ -40,6 +45,8 @@ function getChartContextFromRegistry(layout: ChartLayout, codePanelOpen: boolean
         symbol: state.symbol,
         widgetType: state.widgetType,
         interval: state.interval,
+        activeIndicators: indicatorState?.selectedIds,
+        showVolume: indicatorState?.showVolume,
       };
     }
   });

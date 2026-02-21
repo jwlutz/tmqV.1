@@ -8,6 +8,8 @@ import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import type { ChartTabState } from '../../components/workspace/ChartTabContent';
 // Side-effect import to get the window type augmentation
 import '../../components/workspace/ChartTabContent';
+// Import IndicatorState type from CandlestickWidget
+import type { IndicatorState } from '../../widgets/CandlestickWidget';
 // Import the helper function for testing
 import { getActiveChartState } from '../useActiveChartState';
 
@@ -399,6 +401,235 @@ describe('getActiveChartState helper (used by CodePanel)', () => {
 
     // Should reflect immediately
     expect(getActiveChartState().symbol).toBe('MSFT');
+
+    cleanup();
+  });
+});
+
+/**
+ * Helper to register indicator state for a chart tab.
+ * This mirrors what CandlestickWidget does.
+ */
+function registerIndicatorState(tabId: string, initialState: IndicatorState) {
+  if (!window.__chartGetIndicatorState) {
+    window.__chartGetIndicatorState = new Map();
+  }
+
+  // Track current state via closure (like React's indicatorStateRef)
+  let currentState = { ...initialState };
+
+  // Register getter
+  window.__chartGetIndicatorState.set(tabId, () => currentState);
+
+  // Return update function and cleanup
+  return {
+    update: (newState: Partial<IndicatorState>) => {
+      currentState = { ...currentState, ...newState };
+    },
+    cleanup: () => {
+      window.__chartGetIndicatorState?.delete(tabId);
+    },
+  };
+}
+
+/**
+ * Extended context getter that includes indicator state (mirrors useChatWithUIActions)
+ */
+function getChartContextWithIndicators() {
+  const chartPanes: Array<{
+    id: string;
+    symbol: string;
+    widgetType: string;
+    activeIndicators?: string[];
+    showVolume?: boolean;
+  }> = [];
+  const activeTabId = window.__activeChartTabId;
+  let activePane: {
+    id: string;
+    symbol: string;
+    widgetType: string;
+    interval: string;
+    activeIndicators?: string[];
+    showVolume?: boolean;
+  } | undefined;
+
+  window.__chartGetState?.forEach((getState, tabId) => {
+    const state = getState();
+    const indicatorState = window.__chartGetIndicatorState?.get(tabId)?.();
+
+    const paneInfo = {
+      id: tabId,
+      symbol: state.symbol,
+      widgetType: state.widgetType,
+      activeIndicators: indicatorState?.selectedIds,
+      showVolume: indicatorState?.showVolume,
+    };
+    chartPanes.push(paneInfo);
+
+    if (tabId === activeTabId) {
+      activePane = {
+        id: tabId,
+        symbol: state.symbol,
+        widgetType: state.widgetType,
+        interval: state.interval,
+        activeIndicators: indicatorState?.selectedIds,
+        showVolume: indicatorState?.showVolume,
+      };
+    }
+  });
+
+  return { activePane, chartPanes };
+}
+
+describe('Indicator Context Awareness', () => {
+  beforeEach(() => {
+    window.__chartSetSymbol = undefined;
+    window.__chartSetWidgetType = undefined;
+    window.__chartSetInterval = undefined;
+    window.__chartGetState = undefined;
+    window.__chartGetIndicatorState = undefined;
+    window.__activeChartTabId = undefined;
+  });
+
+  afterEach(() => {
+    window.__chartSetSymbol = undefined;
+    window.__chartSetWidgetType = undefined;
+    window.__chartSetInterval = undefined;
+    window.__chartGetState = undefined;
+    window.__chartGetIndicatorState = undefined;
+    window.__activeChartTabId = undefined;
+  });
+
+  test('indicator state is included in context', () => {
+    const cleanup = registerChartTab('tab-1', {
+      symbol: 'TSLA',
+      interval: '1d',
+      widgetType: 'candlestick',
+    });
+    const indicators = registerIndicatorState('tab-1', {
+      selectedIds: ['sma', 'rsi'],
+      showVolume: true,
+    });
+
+    const context = getChartContextWithIndicators();
+
+    expect(context.activePane?.activeIndicators).toEqual(['sma', 'rsi']);
+    expect(context.activePane?.showVolume).toBe(true);
+    expect(context.chartPanes[0].activeIndicators).toEqual(['sma', 'rsi']);
+    expect(context.chartPanes[0].showVolume).toBe(true);
+
+    cleanup();
+    indicators.cleanup();
+  });
+
+  test('empty indicators are represented correctly', () => {
+    const cleanup = registerChartTab('tab-1', {
+      symbol: 'BTC-USD',
+      interval: '1d',
+      widgetType: 'candlestick',
+    });
+    const indicators = registerIndicatorState('tab-1', {
+      selectedIds: [],
+      showVolume: false,
+    });
+
+    const context = getChartContextWithIndicators();
+
+    expect(context.activePane?.activeIndicators).toEqual([]);
+    expect(context.activePane?.showVolume).toBe(false);
+
+    cleanup();
+    indicators.cleanup();
+  });
+
+  test('indicator state changes are reflected in context', () => {
+    const cleanup = registerChartTab('tab-1', {
+      symbol: 'AAPL',
+      interval: '1d',
+      widgetType: 'candlestick',
+    });
+    const indicators = registerIndicatorState('tab-1', {
+      selectedIds: ['sma'],
+      showVolume: false,
+    });
+
+    // Initial state
+    let context = getChartContextWithIndicators();
+    expect(context.activePane?.activeIndicators).toEqual(['sma']);
+    expect(context.activePane?.showVolume).toBe(false);
+
+    // Add more indicators
+    indicators.update({ selectedIds: ['sma', 'macd', 'bbands'] });
+    context = getChartContextWithIndicators();
+    expect(context.activePane?.activeIndicators).toEqual(['sma', 'macd', 'bbands']);
+
+    // Toggle volume on
+    indicators.update({ showVolume: true });
+    context = getChartContextWithIndicators();
+    expect(context.activePane?.showVolume).toBe(true);
+
+    // Remove indicators
+    indicators.update({ selectedIds: [] });
+    context = getChartContextWithIndicators();
+    expect(context.activePane?.activeIndicators).toEqual([]);
+
+    cleanup();
+    indicators.cleanup();
+  });
+
+  test('multiple panes have independent indicator states', () => {
+    const cleanup1 = registerChartTab('tab-1', {
+      symbol: 'BTC-USD',
+      interval: '1d',
+      widgetType: 'candlestick',
+    });
+    const cleanup2 = registerChartTab('tab-2', {
+      symbol: 'ETH-USD',
+      interval: '4h',
+      widgetType: 'candlestick',
+    });
+    const indicators1 = registerIndicatorState('tab-1', {
+      selectedIds: ['sma', 'rsi'],
+      showVolume: true,
+    });
+    const indicators2 = registerIndicatorState('tab-2', {
+      selectedIds: ['macd'],
+      showVolume: false,
+    });
+
+    const context = getChartContextWithIndicators();
+
+    // Each pane has its own indicators
+    const pane1 = context.chartPanes.find(p => p.id === 'tab-1');
+    const pane2 = context.chartPanes.find(p => p.id === 'tab-2');
+
+    expect(pane1?.activeIndicators).toEqual(['sma', 'rsi']);
+    expect(pane1?.showVolume).toBe(true);
+    expect(pane2?.activeIndicators).toEqual(['macd']);
+    expect(pane2?.showVolume).toBe(false);
+
+    // Active pane (tab-2, last registered) has its own indicators
+    expect(context.activePane?.activeIndicators).toEqual(['macd']);
+
+    cleanup1();
+    cleanup2();
+    indicators1.cleanup();
+    indicators2.cleanup();
+  });
+
+  test('handles missing indicator registry gracefully', () => {
+    const cleanup = registerChartTab('tab-1', {
+      symbol: 'BTC-USD',
+      interval: '1d',
+      widgetType: 'candlestick',
+    });
+    // Don't register indicator state
+
+    const context = getChartContextWithIndicators();
+
+    // Should work without indicators - undefined is acceptable
+    expect(context.activePane?.activeIndicators).toBeUndefined();
+    expect(context.activePane?.showVolume).toBeUndefined();
 
     cleanup();
   });

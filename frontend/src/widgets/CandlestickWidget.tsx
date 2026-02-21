@@ -43,11 +43,18 @@ export interface CandlestickWidgetProps {
 // Plot color variants for multi-plot indicators
 const MULTI_PLOT_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4']
 
-// Global registry for AI to toggle indicators on charts
+// Indicator state for AI context awareness
+export interface IndicatorState {
+  selectedIds: string[]
+  showVolume: boolean
+}
+
+// Global registry for AI to toggle indicators on charts AND read current state
 declare global {
   interface Window {
     __chartIndicatorToggle?: Map<string, (indicatorId: string) => void>;
     __chartVolumeToggle?: Map<string, () => void>;
+    __chartGetIndicatorState?: Map<string, () => IndicatorState>;
   }
 }
 
@@ -119,6 +126,10 @@ export function CandlestickWidget({
   const onStatusChangeRef = useRef(onStatusChange)
   onStatusChangeRef.current = onStatusChange
 
+  // Ref for indicator state getter (avoids stale closure in registry)
+  const indicatorStateRef = useRef<IndicatorState>({ selectedIds, showVolume })
+  indicatorStateRef.current = { selectedIds, showVolume }
+
   // Bubble indicator info up to ChartPane for header chips/dropdown
   useEffect(() => {
     onIndicatorsReadyRef.current?.({
@@ -130,7 +141,7 @@ export function CandlestickWidget({
       activeIndicators, showVolume, toggleVolume,
       customIndicators, addCustomIndicator, removeCustomIndicator])
 
-  // Expose indicator toggle for AI control via global registry
+  // Expose indicator toggle and state getter for AI control via global registry
   useEffect(() => {
     if (!window.__chartIndicatorToggle) {
       window.__chartIndicatorToggle = new Map()
@@ -138,11 +149,17 @@ export function CandlestickWidget({
     if (!window.__chartVolumeToggle) {
       window.__chartVolumeToggle = new Map()
     }
+    if (!window.__chartGetIndicatorState) {
+      window.__chartGetIndicatorState = new Map()
+    }
     window.__chartIndicatorToggle.set(paneId, toggleIndicator)
     window.__chartVolumeToggle.set(paneId, toggleVolume)
+    // Register state getter (uses ref for fresh state at call time)
+    window.__chartGetIndicatorState.set(paneId, () => indicatorStateRef.current)
     return () => {
       window.__chartIndicatorToggle?.delete(paneId)
       window.__chartVolumeToggle?.delete(paneId)
+      window.__chartGetIndicatorState?.delete(paneId)
     }
   }, [paneId, toggleIndicator, toggleVolume])
 

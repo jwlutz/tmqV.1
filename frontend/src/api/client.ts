@@ -378,6 +378,9 @@ export interface ChartPaneInfo {
   id: string;
   symbol: string;
   widgetType: string;
+  // Active indicators on this chart (for AI awareness)
+  activeIndicators?: string[];
+  showVolume?: boolean;
 }
 
 // Full workspace context for AI awareness
@@ -388,6 +391,9 @@ export interface ChatContext {
     symbol: string;
     widgetType: string;
     interval: string;
+    // Active indicators on this chart (for AI awareness)
+    activeIndicators?: string[];
+    showVolume?: boolean;
   };
   // All chart panes so AI knows what's available
   chartPanes?: ChartPaneInfo[];
@@ -453,11 +459,15 @@ export async function* streamChat(
         symbol: context.activePane.symbol,
         widget_type: context.activePane.widgetType,
         interval: context.activePane.interval,
+        active_indicators: context.activePane.activeIndicators,
+        show_volume: context.activePane.showVolume,
       } : undefined,
       chart_panes: context.chartPanes?.map(p => ({
         id: p.id,
         symbol: p.symbol,
         widget_type: p.widgetType,
+        active_indicators: p.activeIndicators,
+        show_volume: p.showVolume,
       })),
       workspace: context.workspace ? {
         layout: context.workspace.layout,

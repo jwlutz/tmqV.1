@@ -351,11 +351,23 @@ async def chat_stream(
 
         # Active pane info
         if active_pane:
-            context_lines.append(
+            pane_desc = (
                 f"Active/focused pane: {active_pane.get('id')} showing "
                 f"{active_pane.get('symbol', 'BTC-USD')} ({active_pane.get('widget_type', 'candlestick')}) "
                 f"on {active_pane.get('interval', '1d')} timeframe"
             )
+            # Include active indicators if any
+            active_indicators = active_pane.get("active_indicators", [])
+            show_volume = active_pane.get("show_volume", False)
+            if active_indicators or show_volume:
+                indicator_parts = []
+                if show_volume:
+                    indicator_parts.append("volume")
+                indicator_parts.extend(active_indicators or [])
+                pane_desc += f" with indicators: [{', '.join(indicator_parts)}]"
+            else:
+                pane_desc += " with no indicators active"
+            context_lines.append(pane_desc)
 
         # All chart panes
         if chart_panes and len(chart_panes) > 1:
@@ -382,6 +394,7 @@ async def chat_stream(
                 f"use {default_symbol} as the default.\n"
                 f"When changing widgets or symbols without specifying a pane, target the active pane.\n"
                 f"If multiple chart panes exist and the request is ambiguous, ask the user which pane to modify.\n"
+                f"When the user asks what indicators are active/on, refer to the indicator list above.\n"
                 f"</workspace_state>"
             )
 
